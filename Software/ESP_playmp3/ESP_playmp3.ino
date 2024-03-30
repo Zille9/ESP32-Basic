@@ -8,6 +8,7 @@
   // sonstige Hardwarekonfiguration siehe Basic32+
   // created by R.Zielinski - Berlin
   // Nutzung auf eigene Gefahr!!! :-)
+  // Playorder ist noch nicht korrekt -> :-(
   // *******************************************************************************
 */
 #define Version "Vers1.1 - 03/2024"
@@ -149,8 +150,9 @@ void playPrevTrack() {
   if (file) {
     playFile(file);
   } else {
-    //status_text("Playback form SD card done\n");
-    delay(1000);
+    files.rewindDirectory();
+    po.num = 1;
+    playNextTrack();
   }
 }
 
