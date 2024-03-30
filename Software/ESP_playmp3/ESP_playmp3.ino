@@ -79,6 +79,9 @@ static char sd_pfad[2];            //SD-Card Root-Datei-Pfad
 
 int Key_l = 0;
 int Key_r = 0;
+int Key_u = 0;
+int Key_d = 0;
+uint8_t curGain = 40;    //current loudness
 
 int title_length = 0;
 String currentFile;
@@ -103,6 +106,14 @@ void bcolor(int bc) {
   GFX.setBrushColor((bitRead(bc, 5) * 2 + bitRead(bc, 4)) * 64, (bitRead(bc, 3) * 2 + bitRead(bc, 2)) * 64, (bitRead(bc, 1) * 2 + bitRead(bc, 0)) * 64);
 }
 
+//change the loudness to current gain
+void setGain() {
+  float v = curGain / 100.0;
+  out->SetGain(v);  //the parameter is the loudness as percent
+  GFX.fillRectangle(353, 68, 390, 77);
+  drawing_text(3, 353, 65, "V:");
+  drawing_text(3, 367, 66, String(curGain));
+}
 
 void playFile(File file, bool addToList = false) {
   String fileName = String(file.name());
@@ -138,7 +149,7 @@ void playPrevTrack() {
   if (file) {
     playFile(file);
   } else {
-    status_text("Playback form SD card done\n");
+    //status_text("Playback form SD card done\n");
     delay(1000);
   }
 }
@@ -150,7 +161,7 @@ void playNextTrack() {
   Serial.println("next");
   File file;
   GFX.fillRectangle(59, 60, 307, 84);                    //Display-Ausschnitt
-  
+
   nextName = po.next();
   nextName.toCharArray(tempstring, nextName.length() + 1);
   if (strstr(tempstring, hi)) hidden = true;
@@ -284,24 +295,24 @@ void setup()
       }
       *vk = VirtualKey::VK_NONE;
     }
-    /*
-        if (*vk == VirtualKey::VK_UP) {
-          if (keyDown) {
-            Key_y--;
-            swap = true;
-            if (Key_y < 0) Key_y = 3;
-          }
-           vk = VirtualKey::VK_NONE;
-        }
-        else if (*vk == VirtualKey::VK_DOWN) {                                               //
-          if (keyDown) {
-            Key_y++;
-            swap = true;
-            if (Key_y > 3) Key_y = 0;
-          }
-           vk = VirtualKey::VK_NONE;
-        }
-    */
+
+    else if (*vk == VirtualKey::VK_PLUS) {
+      if (keyDown) {
+        Key_u = 1;
+        curGain++;
+        if (curGain > 200) curGain = 200;
+      }
+      *vk = VirtualKey::VK_NONE;
+    }
+    else if (*vk == VirtualKey::VK_MINUS) {                                               //
+      if (keyDown) {
+        Key_d = 1;
+        curGain--;
+        if (curGain < 0) curGain = 0;
+      }
+      *vk = VirtualKey::VK_NONE;
+    }
+
     else if (*vk == VirtualKey::VK_ESCAPE) {                                               //
       if (keyDown) {
         Key_esc = true;
@@ -359,11 +370,16 @@ VGAController.setOrientation(fabgl::TFTOrientation::Rotate270);  //Kontakte link
 
   fcolor(11);
   drawing_text(3, 285, 72, String(po.num));          //Titelnummer
-
+  
   // ein I2C-Interface definieren
   myI2C.begin(SDA_RTC, SCL_RTC, 400000); //400kHz
   rtc.begin(&myI2C);
   getdatetime();                                              //ESP32-interne Uhr stellen für Datei-Zeitstempel
+
+  GFX.fillRectangle(353, 68, 390, 77);                        //Lautstärke Anzeige
+  drawing_text(3, 353, 65, "V:");
+  drawing_text(3, 367, 66, String(curGain));
+  
   source = new AudioFileSourceSD();
   id3 = new AudioFileSourceID3(source);
   id3->RegisterMetadataCB(MDCallback, (void*)"ID3");
@@ -395,6 +411,7 @@ void startMP3() {
   //create and start a new decoder
   mp3 = new AudioGeneratorMP3();
   mp3->begin(id3, out);
+  setGain();
 }
 
 
@@ -406,13 +423,17 @@ void loop()
       delay(1000);
       playNextTrack();
     }
-  } 
+  }
   if (Key_l || Key_r) {
     mp3->stop();
 
     if (Key_l) playPrevTrack();
     if (Key_r) playNextTrack();
     Key_l = Key_r = 0;
+  }
+  if (Key_u || Key_d) {
+    Key_u = Key_d = 0;
+    setGain();
   }
   if (Key_esc) {
     mp3->stop();
