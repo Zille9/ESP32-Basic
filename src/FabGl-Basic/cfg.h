@@ -15,7 +15,7 @@
 #define TFT_SPIBUS VSPI_HOST
 #define RAMEND 30000  //bei Verwendung ILI9341 muss der Ram verkleinert werden
 #else
-#define RAMEND 50000  //um MP3-Funtionalität in allen Auflösungen zu garantieren, sollte der Wert nicht grösser als 50000 sein
+#define RAMEND 52000  //um MP3-Funtionalität in allen Auflösungen zu garantieren, sollte der Wert nicht grösser als 50000 sein
 #endif
 #define kRamSize  RAMEND
 
@@ -32,7 +32,6 @@
 #define kSD_MISO 16
 #define kSD_MOSI 17
 #define kSD_CLK  14
-#define SD_LED   2
 #endif
 
 //**************** Keyboard-Pins ******************************************
@@ -46,35 +45,4 @@
 //#define Akkualarm_enabled
 
 //**************** Grösse des SPI-RAM'S festlegen *************************
-#define SPI_RAM_SIZE 64 //SPI_RAM_SIZE * 128k -> 23LC1024 = 1 , FRAM 512k = 4, PSRAM 8MB = 62
-
-//**************** Soundgenerator *****************************************
-/*
-#if CONFIG_FREERTOS_UNICORE
-#define ARDUINO_RUNNING_CORE 0
-#else
-#define ARDUINO_RUNNING_CORE 1
-#endif
-
-#define PLAY_SOUND_PRIORITY 3
-
-
-enum wavetype { WAVE_SQUARE, WAVE_SINE, WAVE_TRIANGLE, WAVE_SAW, WAVE_NOISE };
-enum modfreqmode { MODFREQ_NONE, MODFREQ_TO_END, MODFREQ_TO_RELEASE, MODFREQ_TO_SUSTAIN  };
-
-struct playsounddata
-{
-  long attack; // time in millis (for now)
-  long decay; // time in millis (for now)
-  int sustain; // 0-127 range (over volume)
-  long release; // time in millis (for now)
-
-  wavetype wave; // square, sine, triangle, saw, noise
-  int volume;
-  int durationms;
-  int freq_start;
-  int freq_end;
-  modfreqmode modfreq;
-
-};
-*/
+#define SPI_RAM_SIZE 64 //SPI_RAM_SIZE * 128k -> 23LC1024 = 1 , FRAM 512k = 4, PSRAM 8MB = 64

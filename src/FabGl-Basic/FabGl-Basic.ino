@@ -12,7 +12,7 @@
 //      VGA Hsync and Vsync to ESP32 pins 23 and 15                                                                                               //
 //      SD-Card 14, 16, 17, 13 (SCK, MISO, MOSI, CS)             ESP32-Eigenboard                                                                 //
 //      SD-Card 14, 2, 12, 13 (SCK, MISO, MOSI, CS)              TTGO 1.4                                                                         //
-//      FRAM-Board 14, 16, 17, 0 (SCK, MISO, MOSI, CS)           512kB FRAM am SD-SPI-BUS                                                         //
+//      RAM-Board 14, 16, 17, 0 (SCK, MISO, MOSI, CS)            128,512 o. 8000kB RAM am SD-SPI-BUS                                              //
 //      TFT-ILI9341 18, 23, 22, 21, 5 (SCK, MOSI, DC, RESET, CS) TFT-Display ILI9341                                                              //
 //                                                                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +55,8 @@
 //                            -DPI oder QSPI sind damit natürlich nicht möglich aber hallo - 8MB, was will man mehr - ist sogar schon etwas zuviel, mal sehen, was mir dazu noch einfällt
 //                            -man hat somit 3 unterschiedliche Möglichkeiten der RAM-Unterstützung 128kB-SPI-RAM, 512kB FRAM, 2..4..8MB PSRAM
 //                            -FRAM hat den grossen Vorteil, die Daten im ausgeschalteten Zustand nicht zu verlieren und die gleiche Geschwindigkeit und Schreibzyklen (unbegrenzt) wie SPI-Ram zu haben
+//                            -ARC-Routine umgebaut, es wird keine cos-Tabelle mehr gebraucht - die Konvertierung Rad in Deg wird berechnet
+//                            -16500 Zeilen/sek.
 //
 // v2.01b:19.03.2024          -Grafikbefehl ANGLE erstellt, zeichnet eine Linie von x,y mit dem Winkel w und der länge l -> ANGLE x,y,w,l
 //                            -Bildschirmauflösung 320x200 60Hz in fabglconf.h hinzugefügt -> C64 Auflösung, macht die Portierung von Programmen leichter
@@ -128,8 +130,6 @@
 #include "fabgl.h" //********************************************* Bibliotheken zur VGA-Signalerzeugung *********************************************
 fabgl::Terminal         Terminal;
 fabgl::LineEditor       LineEditor(&Terminal);
-//SoundGenerator       soundGenerator;
-//SquareWaveformGenerator swg;
 
 
 //---------------------------------------- die verschiedenen Grafiktreiber --------------------------------------------------------------------------
@@ -144,13 +144,15 @@ fabgl::VGAController    VGAController;      //VGA-Variante
 #else
 fabgl::ILI9341Controller VGAController;     //TFT-Display ILI9341
 #endif
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
-//bool v_mode = false;
+
 //------------------------------------------ Tastatur,GFX-Treiber- und Terminaltreiber -------------------------------------------------------------
 fabgl::PS2Controller    PS2Controller;
 fabgl::Keyboard Keyboard;
 fabgl::Canvas           GFX(&VGAController);
 TerminalController      tc(&Terminal);
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 #define erststart_marker 131                //dieser Marker steht im EEprom an Position 100 - wird der ESP32 zum ersten mal mit dem Basic gestartet werden standard-Werte gesetzt
 //damit eine benutzbare Version gestartet wird
@@ -165,52 +167,44 @@ byte y_char[]      PROGMEM = {8, 8, 8, 14, 20, 14, 14, 16, 16, 14, 14, 14, 16, 1
 unsigned int noteTable []  PROGMEM = {16350, 17320, 18350, 19450, 20600, 21830, 23120, 24500, 25960, 27500, 29140, 30870}; //Notentabelle für Soundausgabe
 //------------------------------------------------------------- Soundgenerator ----------------------------------------------------------------------------
 
+//----------------------------------- Editor -Marker ----------------------------------------------------------------------------------------------
+byte Editor_marker = 101;            // EEPROM-Platz 101 beinhaltet den Editor-marker (123) lädt die Datei tmp.bas nach Rückkehr vom Kilo-Editor
+//-------------------------------------------------------------------------------------------------------------------------------------------------
+
 // ---------------------------------- SD-Karten-Zugriff--------------------------------------------------------------------------------------------
 #include <SD.h>
 #include <SPI.h>
-String run_bin = "run.bin";           //App-Starter
-
-//-------------------------------------- Verwendung der SD-Karte ----------------------------------------------------------------------------------
 //SPI CLASS FOR REDEFINED SPI PINS !
 SPIClass spiSD(HSPI);
-byte Editor_marker = 101;  // EEPROM-Platz 101 beinhaltet den Editor-marker (123)
-#define kSD_Fail  0      //Fehler-Marker
-#define kSD_OK    1      //OK-Marker
-File fp, fpsf;
-/*
-  const char* filetype[] = {".bin", ".bas", ".bmp", "mp3"};
-  const char*  Programs[] PROGMEM = {"Basic32+", "RunCP/M", "CPC-Emu", "ZX81-Emu", "Spectrum-Emu", "KIM1-Emu", "Gameboy-Emu", "VIC-20-Emu", "KILO-Texteditor", "Games", "Vectrex-Emu", "Altair8800-Emu", "Pacman", "Telnet", "PMD-85-Emu", "Invaders"};         //Programme
-  const char* filenames[] PROGMEM = {"basic", "cpm", "cpc", "esp81", "zxesp", "kim1", "gameboy", "Vic20", "kilo", "games", "vectrex", "altair", "pacman", "Telnet", "pmd85", "Invaders"}; //Datei-Namen
+File fp;//, fpsf;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
-int filenums = 16;
-*/
-int Key_x = 0;
-int Key_y = 0;
-bool Key_enter = false;
-int xx_pos[4]  = {3, 12, 21, 30};
-int yy_pos[4]  = {10, 16, 22, 28};
-bool swap = false;
 //------------------------------------- OTA-Update-Lib --------------------------------------------------------------------------------------------
 #include <Update.h>
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------- ESP32-Time-Lib fuer Datei-zeitstempel ---------------------------------------------------------------------
 #include <ESP32Time.h>
 ESP32Time e_rtc(0);  // offset in seconds GMT+1
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------- Mathematische Funktionen fuer printnum --------------------------------------------------------------------
 #include "MathHelpers.h"
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 // ------------------------------ Dallas Temp-Sensor ----------------------------------------------------------------------------------------------
 #include <OneWire.h>
 #include <DallasTemperature.h>
 bool twire = false;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //--------------------------------- DHT-Sensor ----------------------------------------------------------------------------------------------------
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
 uint32_t delayMS;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //-------------------------------- BMP180-Sensor---------------------------------------------------------------------------------------------------
 #include <Adafruit_Sensor.h>
@@ -219,15 +213,18 @@ uint32_t delayMS;
 Adafruit_BMP085 bmp;
 // Store the current sea level pressure at your location in Pascals.
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 // -------------------------- EEPROM Routinen für Parameter-Speicherung ---------------------------------------------------------------------------
 #include <EEPROM.h>
 #define EEPROM_SIZE 512  //512 byte lesen/speichern
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //---------------------------- EEPROM o.FRAM-Chip I2C-Adressen ------------------------------------------------------------------------------------
 
 short int EEprom_ADDR = 0x50; //-> Adresse 0x50 ist der EEPROM auf dem Board
 //short int EEprom_ADDR = 0x57; //-> Adresse 0x57 ist der EEPROM auf dem RTC3231 Board
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 // ---------------------------- W2812-seriell LED-Treiber -----------------------------------------------------------------------------------------
@@ -237,12 +234,14 @@ unsigned int LED_PIN        = 2;
 unsigned int LED_BRIGHTNESS = 50;
 unsigned int LED_TYP        = 2;
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);                //WS2812
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------ MCP23017 IO-Expander ---------------------------------------------------------------------------------------------
 #include <Adafruit_MCP23X17.h>   //Adafruit MCP23xx Treiber
 Adafruit_MCP23X17 mcp;
 short int MCP23017_ADDR = 0x20 ; //Adresse 32 (0x20) für eingebauten MCP23017
 bool mcp_start_marker = false;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------ I2C Library ------------------------------------------------------------------------------------------------------
 #include <Wire.h>           // for I2C 
@@ -254,6 +253,7 @@ byte IIC_SET = 55;      // -steht 55 im EEprom-Platz 13, dann sind die Werte im 
 // dies ist die Standard-Konfiguration
 byte SDA_RTC = 3;
 byte SCL_RTC = 1;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //-------------------------------------- LCD-Treiber ----------------------------------------------------------------------------------------------
 #include "HD44780_LCD_PCF8574.h"
@@ -261,24 +261,27 @@ byte SCL_RTC = 1;
 int LCD_SPALTEN, LCD_ZEILEN, LCD_ADRESSE, LCD_NACHKOMMA;
 bool LCD_start_marker = false;
 bool LCD_Backlight = true;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
-//---------------------------------------- Konfiguration FRAM -------------------------------------------------------------------------------------
-//------------------------------------- SPI-FRAM-Lib ----------------------------------------------------------------------------------------------
-#include "Adafruit_FRAM_SPI.h"
+//######################################### Anfang Konfiguration SPI-RAM ##########################################################################
+//------------------------------------------- SPI-RAM-Lib -----------------------------------------------------------------------------------------
+#include "Adafruit_FRAM_SPI.h"        // Library unterstützt 23LC1024, Adafruit SPI-FRAM und PSRAM
 
-byte FRAM_CS  = 0;//13;             //SPI_FRAM 512kB CS-Pin
+byte FRAM_CS  = 0;                    //SPI-RAM CS-Pin
 Adafruit_FRAM_SPI spi_fram = Adafruit_FRAM_SPI(kSD_CLK, kSD_MISO, kSD_MOSI, FRAM_CS);
 
 //---------------------------------------- spezielle SPI-Ram-Adressen -----------------------------------------------------------------------------
 word FRAM_OFFSET      = 0x8000;     //Offset für Poke-Anweisungen, um zu verhindern, das in den Array-Bereich gepoked wird
 word FRAM_PIC_OFFSET  = 0x12C04;    //Platz pro Bildschirm im Speicher 320x240=76800 + 4Byte für die Dimension = 76804
 long load_adress      = 0x8000;     //ab hier kann ein Basicprogramm abgelegt werden (Eingabe: LOAD oder SAVE ohne Parameter)
+
 //---------------------------------------- Array-Parameter ----------------------------------------------------------------------------------------
 //Der Arraybereich befindet sich 0x0..0x7fff
 word Var_Neu_Platz =  0;            //Adresse nächstes Array-Feld Start bei 0x77e00
 static word VAR_TBL = 0x7e00;       //Variablen-Array-Tabelle im SPI-RAM
 static word STR_TBL = 0x7f00;       //String-Array-Tabelle im SPI-RAM
 //-------------------------------------------------------------------------------------------------------------------------------------------------
+//######################################### Ende Konfiguration SPI-RAM ############################################################################
 
 
 
@@ -289,21 +292,25 @@ bool ser_marker = false;      //seriell-Marker, wenn gesetzt erfolgt jede Printa
 bool list_send = false;
 bool serout_marker = false;
 #define SERIAL_SIZE_RX 1024
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
+//------------------------------------------------ Startparameterauswahl --------------------------------------------------------------------------
 byte Keyboard_lang = KLayout; //Tastatur-Layout (cfg.h)
 byte KEY_SET = 66;      //-steht 66 im EEprom Platz 15, dann Nummer des Keyboard-Layouts aus dem EEProm laden
 byte THEME_SET = 77;    //-steht 77 im EEPROM Platz 17, dann setze das gespeicherte Theme
 byte PATH_SET = 88;     //-steht 88 im EEPROM Platz 19, dann setze Arbeits-Pfad
-
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------- Akku-Überwachung ------------------------------------------------------------------------------------------
-#ifdef Akkualarm_enabled
+#ifdef Akkualarm_enabled            // Akku-Überwachung für batteriebetriebene Geräte
 hw_timer_t *Akku_timer = NULL;      //Interrupt-Routine Akku-Überwachung
 #endif
 #define Batt_Pin 39                 //Pin wird in jedem Fall definiert
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------- BMP-Info-Parameter für PIC-Befehl -------------------------------------------------------------------------------
 uint32_t bmp_width, bmp_height;
+//-------------------------------------------------------------------------------------------------------------------------------------------------
 
 #define bool int
 #define true 1
@@ -4441,17 +4448,17 @@ void clear_var()
 
   memset(tempstring, '\0', sizeof(tempstring));
 
-  for (int i = 0; i < VAR_SIZE * 26 * 27; i++)                    //Variablen löschen
+  for (int i = 0; i < VAR_SIZE * 26 * 27; i++)                     //Variablen löschen
   {
     variables_begin[i] = 0;
   }
   memset(Stringtable, '\0', sizeof(Stringtable));
-  for (int i = 0; i < 0x7fff; i += 4) SPI_RAM_write(i, bytes, 4); //Variablen im FRam löschen
-  Var_Neu_Platz = 0;                                              //Array-Zeiger zurücksetzen
-  num_of_datalines = 0;                                           //Datazeilenzähler zurücksetzen
-  del_window();                                                   //Fensterparameter löschen
-  Frame_nr = 0;                                                   //Hauptfenster setzen
-
+  for (int i = 0; i < 0x0fff; i += 4) SPI_RAM_write(i, bytes, 4);  //die ersten 4kb Array-Variablen im Ram löschen
+  for (int i=0x7e00; i<0x8000; i += 4) SPI_RAM_write(i, bytes, 4); //Array-Tabellen löschen
+  Var_Neu_Platz = 0;                                               //Array-Zeiger zurücksetzen
+  num_of_datalines = 0;                                            //Datazeilenzähler zurücksetzen
+  del_window();                                                    //Fensterparameter löschen
+  Frame_nr = 0;                                                    //Hauptfenster setzen
   return;
 }
 
@@ -5678,16 +5685,6 @@ static int inchar()
           c = Terminal.read();          //Standard-Tasteneingabe
 
           switch (c) {
-            /*
-              case 27:
-              if (Terminal.available() ) {
-              d = Terminal.read();
-              c = d;
-              break;
-              //Terminal.print(d,DEC);
-              }
-              break;
-            */
             case 0x03:       // ctrl+c        -> BREAK
               current_line = 0;
               sp = program + sizeof(program);
@@ -5787,18 +5784,15 @@ static int initSD( void )
 {
   int c;
   int adr, i;
-  //  SPI.begin();
-  //  SPI.setFrequency(10000000);
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
   SPI.setFrequency(20000000);
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   if ( !SD.begin( kSD_CS, spiSD )) {                        //SD-Card starten
     // mount-fehler
     spiSD.end();                                            //unmount
     syntaxerror(sderrormsg);
-    return kSD_Fail;
+    return 0;
   }
 
   // file redirection flags
@@ -5829,8 +5823,8 @@ static int initSD( void )
   }
 
   printmsg("SD-Card OK", 1);
-  sd_ende();                                                 //unmount
-  return kSD_OK;
+  sd_ende();                                               //unmount
+  return 1;                                                //OK
 }
 
 //#######################################################################################################################################
@@ -5839,51 +5833,10 @@ static int initSD( void )
 
 void sd_ende(void) {
   spiSD.end();                                              //SD-Card unmount
-  Show_LED(SD_LED, 0);
   spi_fram.begin(3);                                        //FRAM aktivieren
-
 }
 
-void Show_LED(int p, int lv) {                              //Laufwerksanzeige ein und ausschalten
-  if (lv) {
-    pinMode(p, OUTPUT);
-    digitalWrite(p, HIGH);
-  }
-  else {
-    digitalWrite(p, LOW);
-    pinMode(p, INPUT);
-  }
-}
-/*
-  //#######################################################################################################################################
-  //--------------------------------------------- MP3 - Player ----------------------------------------------------------------------------
-  //#######################################################################################################################################
 
-  void play_mp3(void) {
-  fp = SD.open(String(sd_pfad) + String(tempstring));     //Datei zum Laden öffnen
-  source = new AudioFileSourceSD();
-  //  id3->RegisterMetadataCB(MDCallback, (void*)"ID3");
-  out = new AudioOutputI2S(0, 1);  // use the internal DAC channel 1 (pin25) on ESP32
-  source->open(fp.name());
-  id3 = new AudioFileSourceID3(source);
-  mp3 = new AudioGeneratorMP3();
-  mp3->begin(id3, out);
-  while (!break_marker)           //Abbruch mit ESC
-  {
-    if (mp3->isRunning()) {
-      if (!mp3->loop()) {
-        mp3->stop();
-        break_marker = true;      //am Liedende Ausstieg
-      }
-    }
-  }
-
-  mp3->stop();
-  break_marker = false;
-  sd_ende();
-  }
-
-*/
 //#######################################################################################################################################
 //--------------------------------------------- LOAD - Befehl ---------------------------------------------------------------------------
 //#######################################################################################################################################
@@ -5902,7 +5855,6 @@ static int load_file(void)
   if (expression_error) return expression_error;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   if ( !SD.exists(String(sd_pfad) + String(tempstring)))    //Datei vorhanden?
   {
@@ -5917,7 +5869,7 @@ static int load_file(void)
     fcheck = check_extension();
     switch (fcheck) {
       case 0:
-        syntaxerror(extension_error);//Terminal.println("no valid File-extension");
+        syntaxerror(extension_error);                           //falsche Dateierwieterung
         return 1;
         break;
       case 1:
@@ -5926,10 +5878,10 @@ static int load_file(void)
         inhibitOutput = true;
         break;
       case 2:
-        load_binary();
+        load_binary();                                          //Apps laden
         break;
-      case 3:
-        play_mp3();
+      case 3:     
+        play_mp3();                                             //MP3-Datei abspielen
         break;
       /*
         case 4:
@@ -5980,7 +5932,6 @@ static int save_file()
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   // remove the old file if it exists
   if ( SD.exists( String(sd_pfad) + String(tempstring))) {          //Datei existiert schon, überschreiben?
@@ -6109,7 +6060,6 @@ static int cmd_delFiles(void)
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   // Datei löschen, wenn sie existiert
   if ( SD.exists(String(sd_pfad) + String(tempstring))) {
@@ -6171,7 +6121,6 @@ void cmd_chdir(void)
     return;
   }
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   //prüfen, ob der Pfad gültig ist
   if ( !SD.open(String(sd_pfad))) {
@@ -6197,7 +6146,6 @@ static int cmd_mkdir(int mod)
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-  Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
   if (mod == 1) {
     // Verzeichnis erstellen
@@ -6304,13 +6252,9 @@ return 0;
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
 
-    Show_LED(SD_LED, 1);                                        //Laufwerksanzeige
 
     File dir = SD.open(String(sd_pfad));
     dir.seek(0);                                                  //zum Verzeichnis-Anfang
-
-    pinMode(SD_LED, OUTPUT);
-    digitalWrite(SD_LED, HIGH);
 
     while ( !ex ) {
       File entry = dir.openNextFile();                            //nächsten Eintrag holen
@@ -6320,7 +6264,7 @@ return 0;
       }
       cbuf = String(entry.name());
       cbuf.toCharArray(tempstring, cbuf.length() + 1);
-      //if (tempstring[1] == '.' /*&& tempstring[2]=='_'*/) hidden_flag = true;
+      
       if (strstr(tempstring, hi)) hidden_flag = true;             //versteckte dateien ausblenden
       if (ext == true) {                                          //Sucherweiterung aktiv?
         found = search_file(entry.name());                        //untersuche Dateinamen mit Suchstring
@@ -6437,8 +6381,7 @@ return 0;
     line_terminator();
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
 
-    Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
-
+ 
     if (fs.rename(path1, path2)) {
       printmsg("File renamed", 1);
     } else {
@@ -6732,7 +6675,6 @@ String editorname = "kilo.bin";
 tempname.toCharArray(tempstring, tempname.length() + 1);
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
-    Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
     // remove the old file if it exists
     if (SD.exists( String(sd_pfad) + String(tempstring))) {          //Datei existiert schon?,dann überschreiben
@@ -6774,7 +6716,6 @@ tempname.toCharArray(tempstring, tempname.length() + 1);
     tempname.toCharArray(tempstring, tempname.length() + 1);  //Dateiname tmp.Bas nach tempstring kopieren
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-    Show_LED(SD_LED, 1);                                      //Laufwerksanzeige
 
     if ( !SD.exists(String(sd_pfad) + String(tempstring)))    //Datei vorhanden?
     {
@@ -8868,6 +8809,7 @@ nochmal:
     }
 
     //------------------------------------------------------- Testbereich ARC-Befehl ------------------------------------------------------------------
+/*
     const int cos_tab[360] = {
       1000, 1000, 999, 999, 998, 996, 995, 993, 990, 988, 985, 982, 978, 974, 970, 966,
       961, 956, 951, 946, 940, 934, 927, 921, 914, 906, 899, 891, 883, 875, 866, 857,
@@ -8895,7 +8837,7 @@ nochmal:
       875, 883, 891, 899, 906, 914, 921, 927, 934, 940, 946, 951, 956, 961, 966, 970,
       974, 978, 982, 985, 988, 990, 993, 995, 996, 998, 999, 999, 1000
     };
-
+*/
     void drawArcP(Point pnt[], int &npnt)
     {
       if ( npnt == 0) npnt++;
@@ -8910,105 +8852,22 @@ nochmal:
       Point pnt[360 * 2];
       int npnt = 0;
 
-      for ( int n = gr_start; n <= gr_end; n += 10)
+      for ( int n = gr_start; n <= gr_end; n += 1)
       {
-        //pnt[npnt].X = x + (deg(cos(n%360)) * r_min)/80;
-        //pnt[npnt].Y = y + (deg(cos((n+270)%360)) * r_min)/100;
-        pnt[npnt].X = x + (cos_tab[n % 360] * r_min) / 800;
-        pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_min) / 1000;
+        pnt[npnt].X = x + (cos((n%360)*M_PI/180)*r_min * 1000 ) / 800;
+        //pnt[npnt].X = x + (cos_tab[n % 360] * r_min) / 800;
+        pnt[npnt].Y = y + (cos(((n + 270)%360) * M_PI/180) * r_min ) ;// 1000;
+        //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_min) / 1000;
         drawArcP(pnt, npnt);
       }
-      for ( int n = gr_end; n >= gr_start; n -= 10)
-      {
-        //pnt[npnt].X = x + (deg(cos(n%360)) * r_max)/80;
-        //pnt[npnt].Y = y + (deg(cos((n+270)&360)) * r_max)/100;
-        pnt[npnt].X = x + (cos_tab[n % 360] * r_max) / 800;
-        pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_max) / 1000;
+      for ( int n = gr_end; n >= gr_start; n -= 1)
+      { pnt[npnt].X = x + (cos((n%360)*M_PI/180)*r_max * 1000) / 800;//cos_tab[n % 360] * r_max) / 800;
+        //pnt[npnt].X = x + (cos_tab[n % 360] * r_max) / 800;
+        pnt[npnt].Y = y + (cos(((n + 270)%360)* M_PI/180) * r_max) ;/// 1000;
+        //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_max) / 1000;
         drawArcP(pnt, npnt);
       }
       if (filled == 1) GFX.fillPath(pnt, npnt);
       else GFX.drawPath( pnt, npnt);
+      GFX.waitCompletion();                                         //warten bis draw-Befehl fertig - sonst Darstellungsfehler
     }
-
-    float deg(float n) {
-      float c = n * M_PI / 180 * 1000; //n*57296;
-      Terminal.println(c);
-      return c;
-    }
-    /*
-      void iPlaySound( void *pvParameters )
-      {
-      playsounddata psd = *(playsounddata *)pvParameters;
-
-      WaveformGenerator *pwave;
-      if ( psd.wave == WAVE_SQUARE)   pwave = new SquareWaveformGenerator();
-      if ( psd.wave == WAVE_SINE)     pwave = new SineWaveformGenerator();
-      if ( psd.wave == WAVE_TRIANGLE) pwave = new TriangleWaveformGenerator();
-      if ( psd.wave == WAVE_SAW)      pwave = new SawtoothWaveformGenerator();
-      if ( psd.wave == WAVE_NOISE)    pwave = new NoiseWaveformGenerator();
-
-      int sustainVolume = psd.sustain * psd.volume / 127;
-
-      soundGenerator.attach( pwave);
-      pwave->setVolume( ((psd.attack == 0) ? ( (psd.decay != 0) ? psd.volume : sustainVolume) : 0) );
-      pwave->setFrequency( psd.freq_start );
-      pwave->enable(true );
-
-      long startTime = millis();
-
-      while ( millis() - startTime < psd.durationms)
-      {
-        long current = millis() - startTime;
-
-        if ( current < psd.attack ) // ATTACK VOLUME
-          pwave->setVolume( (psd.volume * current) / psd.attack );
-        else if ( current > psd.attack && current < (psd.attack + psd.decay)) // DECAY VOLUME
-          pwave->setVolume( map( current - psd.attack,  0, psd.decay,  psd.volume, sustainVolume ) );
-        else if ( current > psd.durationms - psd.release) // RELEASE VOLUME
-          pwave->setVolume( map( current - (psd.durationms - psd.release),  0, psd.release,  sustainVolume, 0 ) );
-        else
-          pwave->setVolume( sustainVolume );
-
-
-        if ( psd.modfreq != MODFREQ_NONE)
-        {
-          int maxtime = psd.durationms;
-          if      (psd.modfreq == MODFREQ_TO_RELEASE)
-            maxtime = (psd.durationms - psd.release); // until release
-          else if (psd.modfreq == MODFREQ_TO_SUSTAIN)
-            maxtime = (psd.attack + psd.decay); // until sustain
-
-          int f = ((current > maxtime) ? psd.freq_end : (map(current, 0, maxtime, psd.freq_start, psd.freq_end)));
-          pwave->setFrequency ( f ) ;
-        }
-        vTaskDelay(1);
-      }
-
-      soundGenerator.detach( pwave);
-      pwave->enable( false );
-      delete pwave;
-
-      vTaskDelete( NULL );
-      }
-
-
-
-      void playSound( playsounddata ps )
-      {
-      // Now set up two tasks to run independently.
-      xTaskCreatePinnedToCore( iPlaySound,  "iPlaySound",
-                               4096,  // This stack size can be checked & adjusted by reading the Stack Highwater
-                               &ps, // sound as parameters
-                               PLAY_SOUND_PRIORITY,  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
-                               NULL,
-                               ARDUINO_RUNNING_CORE);
-      }
-
-
-      void  syncPlaySound( playsounddata psd)
-      {
-      playSound( psd);
-      delay(psd.durationms);
-      }
-
-    */
