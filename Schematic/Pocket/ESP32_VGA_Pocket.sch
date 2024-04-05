@@ -6,7 +6,7 @@
 <setting alwaysvectorfont="no"/>
 <setting verticaltext="up"/>
 </settings>
-<grid distance="1.27" unitdist="mm" unit="mm" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
 <layers>
 <layer number="1" name="Top" color="4" fill="1" visible="no" active="no"/>
 <layer number="2" name="Route2" color="1" fill="3" visible="no" active="no"/>
@@ -18306,6 +18306,7 @@ Source: www.kingbright.com</description>
 <part name="VSS44" library="supply1" deviceset="VSS" device=""/>
 <part name="P+1" library="supply1" deviceset="VCC" device=""/>
 <part name="VDD28" library="supply1" deviceset="VDD" device=""/>
+<part name="RESET_PIN" library="testpad" deviceset="PTR1" device="PAD1-17Y"/>
 </parts>
 <sheets>
 <sheet>
@@ -18499,6 +18500,7 @@ Source: www.kingbright.com</description>
 <instance part="VSS44" gate="G$1" x="30.48" y="-36.83" rot="R90"/>
 <instance part="P+1" gate="VCC" x="-7.62" y="-76.2"/>
 <instance part="VDD28" gate="G$1" x="-7.62" y="-87.63" rot="R180"/>
+<instance part="RESET_PIN" gate="G$1" x="-119.38" y="81.28" rot="R90"/>
 </instances>
 <busses>
 </busses>
@@ -19397,7 +19399,8 @@ Source: www.kingbright.com</description>
 <wire x1="-127" y1="25.4" x2="-127" y2="66.04" width="0.1524" layer="91"/>
 <wire x1="-127" y1="66.04" x2="-120.65" y2="66.04" width="0.1524" layer="91"/>
 <pinref part="SV1" gate="G$1" pin="6"/>
-<wire x1="-127" y1="66.04" x2="-127" y2="107.95" width="0.1524" layer="91"/>
+<wire x1="-127" y1="66.04" x2="-127" y2="81.28" width="0.1524" layer="91"/>
+<wire x1="-127" y1="81.28" x2="-127" y2="107.95" width="0.1524" layer="91"/>
 <wire x1="-127" y1="107.95" x2="-199.39" y2="107.95" width="0.1524" layer="91"/>
 <wire x1="-199.39" y1="107.95" x2="-199.39" y2="74.93" width="0.1524" layer="91"/>
 <junction x="-127" y="66.04"/>
@@ -19405,6 +19408,9 @@ Source: www.kingbright.com</description>
 <pinref part="IC3" gate="G$1" pin="!RESET"/>
 <wire x1="-6.35" y1="107.95" x2="-127" y2="107.95" width="0.1524" layer="91"/>
 <junction x="-127" y="107.95"/>
+<pinref part="RESET_PIN" gate="G$1" pin="TP"/>
+<wire x1="-121.92" y1="81.28" x2="-127" y2="81.28" width="0.1524" layer="91"/>
+<junction x="-127" y="81.28"/>
 </segment>
 </net>
 <net name="N$9" class="0">
