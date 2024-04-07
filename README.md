@@ -9,7 +9,7 @@
 ```
 -ESP32 / 240MHz
 -56472 Basic Bytes free
--VGA-Display 320x240 Pixel 64 Farben oder 400x300 Pixel 64 Farben oder AV (IO26)
+-VGA-Display 320x240 Pixel 64 Farben , AV (IO26) oder TFT-Screen 320x240 Pixel
 -IO-Erweiterung mit MCP23017 (2x8 IO-Ports) + EEPROM 512kB 
 -128kB SPI-RAM oder 8MB PSRAM oder 512kB FRAM(Adafruit SPI FRAM)
 -PS2-Keyboard 
@@ -41,7 +41,9 @@ Die Ursprungsversion wurde durch folgende Funktionen erweitert
 -Spritefunktionen (noch in der Entwicklung)
 -Soundfunktionen (noch in der Entwicklung)
 -integrierte Kurzhilfe
--RUN-CPM kann mit BLOAD"/cpm.bin" gestartet werden (Rückkehr mit EXIT)
+-Binärprogramme können mit RUN"/xxx.bin" gestartet werden - siehe Ordner <Software>
+-CardKb als PS2-Tastatur nutzbar (siehe Ordner <src/CardKeyBoard_neu>)
+-Unterstützung von externem SPI-RAM (128kB, 512kB Fram oder PSRAM im SPI-Mode)
 
 ```
 
