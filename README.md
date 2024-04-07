@@ -93,7 +93,7 @@ Screenshot als BMP-Datei exportiert
 
 ![..mit BLOAD kann dann auch CPM gestartet werden](IMG/Bload.JPG)
 ```
-...mit BLOAD kann dann auch CPM gestartet werden.
+...mit RUN kann dann auch CPM gestartet werden.
 ```
 
 ![..RUN-CPM-Startbildschirm](IMG/cpm.JPG)
