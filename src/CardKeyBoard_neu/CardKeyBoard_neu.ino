@@ -46,7 +46,8 @@ PS2dev keyboard(KB_CLK, KB_DATA); // PS/2
 //fn: d14
 
 int16_t old_no;
-int startup = 0;
+int dl,startup=0;
+
 unsigned char KeyMap[48][7] =
 { //nor, shift,long_shift, sym,long_sym,fn,long_fn,
   {  27,  27,  27,  27,  27, 128, 128},//esc
@@ -688,13 +689,11 @@ void loop() {
     if (no >= 0) {
       flashOn();
       sendScanCode(no);
-      if(old_no == no) delay(35);    //zwetes bis n.tes mal Tastenrepeat
-      else delay(200);               //erstes mal Taste - 200ms Verzögerung
-      flashOff();
+      if(old_no != no) {idle=0; delay(200);}            //erstes mal Taste - 200ms Verzögerung 
+      else {idle=0; delay(33);}                         //zweites bis n.tes mal Tastenrepeat 33ms
       old_no = no;
-      
     }
-
+    flashOff();
     if ((Mode == 1) || (Mode == 3) || (Mode == 5)) {
       Mode = 0;
       _shift = 0;
@@ -706,5 +705,10 @@ void loop() {
   }
 
   idle++;
-  //delay(50);
+  if(idle > 300) {                                       //verhindert, das wenn man die gleiche Taste nach etwa 300ms nochmal drückt der Repeatmodus ausgeschaltet ist, das verhindert doppelte Zeichen
+    old_no = 255;
+    idle=0;
+  }
+  //delay(dl);
+  //flashOff();
 }
