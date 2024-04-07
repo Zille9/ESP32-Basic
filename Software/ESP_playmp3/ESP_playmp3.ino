@@ -298,7 +298,7 @@ void setup()
       *vk = VirtualKey::VK_NONE;
     }
 
-    else if (*vk == VirtualKey::VK_PLUS) {
+    else if (*vk == VirtualKey::VK_8) {                                               //Volume +
       if (keyDown) {
         Key_u = 1;
         curGain++;
@@ -306,7 +306,7 @@ void setup()
       }
       *vk = VirtualKey::VK_NONE;
     }
-    else if (*vk == VirtualKey::VK_MINUS) {                                               //
+    else if (*vk == VirtualKey::VK_7) {                                               //Volume -
       if (keyDown) {
         Key_d = 1;
         curGain--;

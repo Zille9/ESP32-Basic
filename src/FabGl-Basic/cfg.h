@@ -38,9 +38,9 @@
 #define keyb_clk   33
 #define keyb_data  32
 #define KLayout    3  // 1=US, 2=UK, 3=GE, 4=IT, 5=ES, 6=FR, 7=BE, 8=NO, 9=JP
-#ifdef CardKB         //CardKB required Japanese Layout
-#define KLayout 9
-#endif
+//#ifdef CardKB         //CardKB required Japanese Layout
+//#define KLayout 9
+//#endif
 //**************** Akku-Alarm *********************************************
 //#define Akkualarm_enabled
 

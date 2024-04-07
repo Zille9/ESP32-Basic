@@ -545,7 +545,7 @@ void loop()
   // boot ROM
   altair.load(Altair88DiskBootROMAddr, Altair88DiskBootROM, sizeof(Altair88DiskBootROM));
 
-  // menu callback (pressing PAUSE or F12)
+  // menu callback (pressing PAUSE or F9)
   altair.setMenuCallback(emulator_menu);
 
   setupTerminalColors();
@@ -568,7 +568,7 @@ void loop()
   Terminal.printf("\e[33mKbd Layout  : \e[32m%s\e[K\r\n", SupportedLayouts::names()[getKbdLayoutIndex()] );
   Terminal.printf("\e[33mCPU         : \e[32m%s\e[92m\e[K\r\n\e[K\n", getCPU() == 1 ? "Z80" : "i8080");
 
-  Terminal.printf("Press \e[93m[F12]\e[92m or \e[93m[PAUSE]\e[92m to display emulator menu\e[K\r\n");
+  Terminal.printf("Press \e[93m[F9]\e[92m or \e[93m[PAUSE]\e[92m to display emulator menu\e[K\r\n");
 
   setupTerminalColors();
 

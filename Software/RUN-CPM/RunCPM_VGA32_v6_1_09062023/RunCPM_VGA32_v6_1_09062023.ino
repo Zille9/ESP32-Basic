@@ -359,7 +359,7 @@ if (SETVGA8 == true)
   }      
 
   if (ConfDialogApp::getBootInfo() != BOOTINFO_ENABLED) {
-                                                        // _puts("\r\n");
+                                                           //_puts("\r\n");
                                                            _puts("______________________________________________\r\n");
                                                         }
 
@@ -393,12 +393,17 @@ if (KEYCLICK == true)
 // =========================================================================================
 // # USBSerialFilter-Output
 // =========================================================================================
+/*
    _puts("USB   : SerialFilter   [F8]   ");
    if (SERFLT == true)
    {_puts("[    enabled   ]\r\n");}
       else
       {_puts("[   \e[91mdisabled\e[0m   ]\r\n");}
-
+*/
+// =========================================================================================
+// # DebugMem-Output
+// =========================================================================================
+   _puts("Config: Terminal-Param.[F8]   ");
 // =========================================================================================
 // # DebugMem-Output
 // =========================================================================================
@@ -459,7 +464,7 @@ if (KEYCLICK == true)
   // onVirtualKey is triggered whenever a key is pressed or released
   Terminal.onVirtualKeyItem = [&](VirtualKeyItem * vkItem) 
   {
-    if (vkItem->vk == VirtualKey::VK_F12) {
+    if (vkItem->vk == VirtualKey::VK_F8) {
 // =========================================================================================
 // -----------------------------------------------------------------------------------------      
       if (vkItem->CTRL && (vkItem->LALT || vkItem->RALT)) {
@@ -571,6 +576,7 @@ if (KEYCLICK == true)
 // =========================================================================================
 // F8 Toggle SERFLT
 // =========================================================================================
+/*
     if (vkItem->vk == VirtualKey::VK_F8) {
       if (!vkItem->CTRL && !vkItem->LALT && !vkItem->RALT && !vkItem->down) {
           if (SERFLT == true)
@@ -589,7 +595,7 @@ if (KEYCLICK == true)
              // always convert to NONE, on both keydown an dup
              vkItem->vk = VirtualKey::VK_NONE;
                                          }
-
+*/
 // =========================================================================================
 // KeyClick-Sound
 // =========================================================================================
@@ -623,6 +629,7 @@ if (SD.begin(SDINIT)) {
 //   _puts(SDMHZ_TXT);
 //   _puts("Mhz ");
 //   _puts("  ->  [ Done ]\r\n");
+   _puts("\r\n");
    _puts("______________________________________________\r\n");
    
     if (VersionCCP >= 0x10 || SD.exists(CCPname)) {

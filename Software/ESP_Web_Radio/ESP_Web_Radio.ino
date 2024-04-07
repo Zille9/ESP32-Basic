@@ -208,7 +208,7 @@ void setup()
 
 
   PS2Controller.keyboard()-> onVirtualKey = [&](VirtualKey * vk, bool keyDown) {
-    if (*vk == VirtualKey::VK_RIGHT) {
+    if (*vk == VirtualKey::VK_RIGHT) {                                                 //Station +
       if (keyDown) {
         Key_r = 1;
         act_station++;
@@ -216,7 +216,7 @@ void setup()
       }
       *vk = VirtualKey::VK_NONE;
     }
-    else if (*vk == VirtualKey::VK_LEFT) {                                               //
+    else if (*vk == VirtualKey::VK_LEFT) {                                             // Station -
       if (keyDown) {
         Key_l = 1;
         act_station--;
@@ -225,7 +225,7 @@ void setup()
       *vk = VirtualKey::VK_NONE;
     }
 
-    if (*vk == VirtualKey::VK_PLUS) {
+    if (*vk == VirtualKey::VK_8) {                                                   // Volume+
       if (keyDown) {
         Key_u = 1;
         curGain++;
@@ -233,7 +233,7 @@ void setup()
       }
       *vk = VirtualKey::VK_NONE;
     }
-    else if (*vk == VirtualKey::VK_MINUS) {                                               //
+    else if (*vk == VirtualKey::VK_7) {                                               // Volume -
       if (keyDown) {
         Key_d = 1;
         curGain--;
@@ -257,7 +257,7 @@ void setup()
       *vk = VirtualKey::VK_NONE;
     }
 
-    else if (*vk == VirtualKey::VK_ESCAPE) {                                               //
+    else if (*vk == VirtualKey::VK_ESCAPE) {                                            // Back to Basic
       if (keyDown) {
         Key_esc = true;
       }

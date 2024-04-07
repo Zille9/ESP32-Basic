@@ -241,12 +241,12 @@ void Machine::run(CPU cpu, int address)
     for (Device * d = m_devices; d; d = d->next)
       d->tick(cycles);
 
-    // time to check keyboard for menu key (F12 or PAUSE)?
+    // time to check keyboard for menu key (F9 or PAUSE)?
     timeToCheckKeyboard -= cycles;
     if (timeToCheckKeyboard < 0) {
       timeToCheckKeyboard = timeToCheckKeyboardReset;
       auto keyboard = fabgl::PS2Controller::keyboard();
-      if (m_menuCallback && (keyboard->isVKDown(VirtualKey::VK_PAUSE) || keyboard->isVKDown(VirtualKey::VK_F12)))
+      if (m_menuCallback && (keyboard->isVKDown(VirtualKey::VK_PAUSE) || keyboard->isVKDown(VirtualKey::VK_F9)))
         m_menuCallback();
     }
   }

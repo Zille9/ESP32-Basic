@@ -45,9 +45,23 @@
 // April 2021
 //
 //
-#define BasicVersion "2.02b"
-#define BuiltTime "26.03.2024"
+#define BasicVersion "2.04b"
+#define BuiltTime "07.04.2024"
 // siehe Logbuch.txt zum Entwicklungsverlauf
+// v2.04b:07.04.2024          -
+//                            -
+//
+// v2.03b:05.04.2024          -Treiber der Eigenbau-Tastatur ist jetzt zufriedenstellend funktionsfähig, dadurch wurde es nötig die Keyboard-Layout - Umschaltung über den OPT-Befehl
+//                            -wieder zugänglich zu machen, das spart die Neucompilierung bei Verwendung unterschiedlicher Tastaturen (Layout steht im EEPROM-Platz 15)
+//                            -die Card-KB - Eigenbau - Tastatur erfordert das japanische Layout (Layout 9)
+//                            -I2C-Problem mit dem neuen Board, offensichtlich reichen die Pullups des RTC-Moduls für SDA und SCL nicht (bei Netzteilbetrieb), es sind (zumindest für SDA) auf dem Board Pullups notwendig.
+//                            -da die Leitungen auf IO1 und IO3 (RX TX) hängen fiel das mit bestehender USB-Verbindung nicht auf (Pegel war hoch genug) - Änderung im Bord-Layout eingepflegt
+//                            -und im bestehenden Board zusätzlichen Widerstand eingelötet :-( ärgerlich! -> bei 3,3V muss der Pullup-Widerstand der SDA-Leitung bei ca.2kOhm liegen
+//                            -PS2-Treiber der Eigenbau-Tastatur funktioniert nicht bei allen App's - offensichtlich verhält sich eine echte PS2-Tastatur etwas anders als der Eigenbau
+//                            -funktionierende Apps: Basic32+, Kilo, VIC20, CPC, ZXESP, Webradio, MP3-Player, Games, ESP-Starter, CPM, Altair, PMD85, Vectrex, Telnet, Invaders - teilweise Tastenanpassungen nötig (Webradio, MP3-Player, Altair, Telnet)
+//                            -nicht funktionierende Apps: ESP81, Pacman, Kim1, Gameboy -> keine Reaktion auf Tasteneingaben - Anderer Keyboardtreiber
+//                            -SD-Card-Behandlung erweitert - wenn keine oder fehlerhafte Karte detektiert wird
+//
 // v2.02b:26.03.2024          -neues Board eingetroffen, mit dem es möglich ist SPI-RAM (23LC1024) oder vielleicht sogar PSRAM zu testen, das würde den teuren FRAM ersetzen
 //                            -FRAM-Library von Adafruit gekürzt, es wurde die Abfrage der Device-ID deaktiviert. Lt.Datenblatt sollte normaler SPI-RAM und sogar PSRAM ansprechbar sein
 //                            -erste Tests bestätigen die Kompatibilität des Treibers für 23LC1024-SPI-Ram Chips - lesen und schreiben funktioniert
@@ -55,7 +69,7 @@
 //                            -DPI oder QSPI sind damit natürlich nicht möglich aber hallo - 8MB, was will man mehr - ist sogar schon etwas zuviel, mal sehen, was mir dazu noch einfällt
 //                            -man hat somit 3 unterschiedliche Möglichkeiten der RAM-Unterstützung 128kB-SPI-RAM, 512kB FRAM, 2..4..8MB PSRAM
 //                            -FRAM hat den grossen Vorteil, die Daten im ausgeschalteten Zustand nicht zu verlieren und die gleiche Geschwindigkeit und Schreibzyklen (unbegrenzt) wie SPI-Ram zu haben
-//                            -ARC-Routine umgebaut, es wird keine cos-Tabelle mehr gebraucht - die Konvertierung Rad in Deg wird berechnet
+//                            -ARC-Routine umgebaut, es wird keine cos-Tabelle mehr gebraucht - die Konvertierung Rad in Deg wird berechnet, ausserdem ist die Darstellung genauer
 //                            -16500 Zeilen/sek.
 //
 // v2.01b:19.03.2024          -Grafikbefehl ANGLE erstellt, zeichnet eine Linie von x,y mit dem Winkel w und der länge l -> ANGLE x,y,w,l
@@ -295,8 +309,7 @@ bool serout_marker = false;
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------------------ Startparameterauswahl --------------------------------------------------------------------------
-byte Keyboard_lang = KLayout; //Tastatur-Layout (cfg.h)
-byte KEY_SET = 66;      //-steht 66 im EEprom Platz 15, dann Nummer des Keyboard-Layouts aus dem EEProm laden
+byte Keyboard_lang = KLayout; //Tastatur-Layout (cfg.h) - Standardeinstellung=German
 byte THEME_SET = 77;    //-steht 77 im EEPROM Platz 17, dann setze das gespeicherte Theme
 byte PATH_SET = 88;     //-steht 88 im EEPROM Platz 19, dann setze Arbeits-Pfad
 //-------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3216,7 +3229,7 @@ void Basic_Interpreter()
   //################################################# Hauptprogrammschleife ######################################################
   while (1)
   {
-
+    //Terminal.println("Anfang");
 
     expression_error = 0;                               //alle Errors zurücksetzen
 
@@ -3872,7 +3885,6 @@ interpreteAtTxtpos:
 
       case KW_MOUNT:
         initSD();                                              //SD-Karte initialisieren
-        //spi_fram.begin(3);                                     //Fram select
         break;
 
       case KW_COM:
@@ -4453,8 +4465,13 @@ void clear_var()
     variables_begin[i] = 0;
   }
   memset(Stringtable, '\0', sizeof(Stringtable));
-  for (int i = 0; i < 0x0fff; i += 4) SPI_RAM_write(i, bytes, 4);  //die ersten 4kb Array-Variablen im Ram löschen
-  for (int i=0x7e00; i<0x8000; i += 4) SPI_RAM_write(i, bytes, 4); //Array-Tabellen löschen
+  //for (int i = 0; i < 0x0fff; i += 4) SPI_RAM_write(i, bytes, 4);
+  if (Var_Neu_Platz > 0) {                                          //SPI-Ram nur löschen, wenn Arrays definiert wurden
+    SPI_RAM_fill(0x0, 0x0fff, 0);                                   //die ersten 4kb Array-Variablen im Ram löschen
+    SPI_RAM_fill(0x7e00, 0x8000, 0);                                //Array-Tabellen löschen
+  }
+
+  //for (int i = 0x7e00; i < 0x8000; i += 4) SPI_RAM_write(i, bytes, 4);
   Var_Neu_Platz = 0;                                               //Array-Zeiger zurücksetzen
   num_of_datalines = 0;                                            //Datazeilenzähler zurücksetzen
   del_window();                                                    //Fensterparameter löschen
@@ -5787,12 +5804,10 @@ static int initSD( void )
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
   SPI.setFrequency(20000000);
-
-  if ( !SD.begin( kSD_CS, spiSD )) {                        //SD-Card starten
-    // mount-fehler
-    spiSD.end();                                            //unmount
+  while (!SD.begin( kSD_CS, spiSD))
+  {
     syntaxerror(sderrormsg);
-    return 0;
+    delay(3000);
   }
 
   // file redirection flags
@@ -5855,6 +5870,10 @@ static int load_file(void)
   if (expression_error) return expression_error;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+  while (!SD.begin( kSD_CS, spiSD)) {
+    syntaxerror(sderrormsg);
+    delay(3000);
+  }
 
   if ( !SD.exists(String(sd_pfad) + String(tempstring)))    //Datei vorhanden?
   {
@@ -5880,7 +5899,7 @@ static int load_file(void)
       case 2:
         load_binary();                                          //Apps laden
         break;
-      case 3:     
+      case 3:
         play_mp3();                                             //MP3-Datei abspielen
         break;
       /*
@@ -5908,7 +5927,7 @@ int check_extension() {
   a = cbuf.compareTo(".BAS");
   b = cbuf.compareTo(".BIN");
   c = cbuf.compareTo(".MP3");
-  d = cbuf.compareTo(".MOD");                       //Frei - Mod-Player funktioniert nicht gut
+  d = cbuf.compareTo(".SCR");                       //SCR - Spectrum-Bilddateien - Test
   if (a == 0) e = 1;
   if (b == 0) e = 2;
   if (c == 0) e = 3;
@@ -5932,6 +5951,10 @@ static int save_file()
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
+  while (!SD.begin( kSD_CS, spiSD)) {
+    syntaxerror(sderrormsg);
+    delay(3000);
+  }
 
   // remove the old file if it exists
   if ( SD.exists( String(sd_pfad) + String(tempstring))) {          //Datei existiert schon, überschreiben?
@@ -5997,14 +6020,14 @@ static int save_ram(void) {
   //------ Kennung f. Programm im FRAM ------
   SPI_RAM_write8(adress++, 'B');
   SPI_RAM_write8(adress++, 'S');
-  
+
   SPI_RAM_write8(adress++, lowByte(n_bytes));           //Anzahl zu speichernde Programm-Bytes schreiben
   SPI_RAM_write8(adress++, highByte(n_bytes));
-  
+
   for (int i = 0; i < n_bytes; i++) {                   //Arbeitsspeicher in FRAM ablegen
     SPI_RAM_write8(adress++, program[i]);
   }
-  
+
   return 0;
 }
 
@@ -6022,7 +6045,7 @@ static int load_ram(void) {
 
   a = spi_fram.read8(adress++);
   b = spi_fram.read8(adress++);
-  
+
   //------ Kennung f. Programm im RAM ------
   if (a == 'B' && b == 'S') {
 
@@ -6060,6 +6083,10 @@ static int cmd_delFiles(void)
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+  while (!SD.begin( kSD_CS, spiSD)) {
+    syntaxerror(sderrormsg);
+    delay(3000);
+  }
 
   // Datei löschen, wenn sie existiert
   if ( SD.exists(String(sd_pfad) + String(tempstring))) {
@@ -6121,7 +6148,10 @@ void cmd_chdir(void)
     return;
   }
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
-
+  while (!SD.begin( kSD_CS, spiSD)) {
+    syntaxerror(sderrormsg);
+    delay(3000);
+  }
   //prüfen, ob der Pfad gültig ist
   if ( !SD.open(String(sd_pfad))) {
     printmsg(dirnotfound, 1);
@@ -6146,6 +6176,10 @@ static int cmd_mkdir(int mod)
   if (expression_error) return 1;
 
   spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+  while (!SD.begin( kSD_CS, spiSD)) {
+    syntaxerror(sderrormsg);
+    delay(3000);
+  }
 
   if (mod == 1) {
     // Verzeichnis erstellen
@@ -6251,7 +6285,10 @@ return 0;
     }
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
-
+    while (!SD.begin(kSD_CS, spiSD)) {
+      syntaxerror(sderrormsg);
+      delay(3000);
+    }
 
     File dir = SD.open(String(sd_pfad));
     dir.seek(0);                                                  //zum Verzeichnis-Anfang
@@ -6264,7 +6301,7 @@ return 0;
       }
       cbuf = String(entry.name());
       cbuf.toCharArray(tempstring, cbuf.length() + 1);
-      
+
       if (strstr(tempstring, hi)) hidden_flag = true;             //versteckte dateien ausblenden
       if (ext == true) {                                          //Sucherweiterung aktiv?
         found = search_file(entry.name());                        //untersuche Dateinamen mit Suchstring
@@ -6380,8 +6417,11 @@ return 0;
     printmsg(path2, 0);
     line_terminator();
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+    while (!SD.begin( kSD_CS, spiSD)) {
+      syntaxerror(sderrormsg);
+      delay(3000);
+    }
 
- 
     if (fs.rename(path1, path2)) {
       printmsg("File renamed", 1);
     } else {
@@ -6475,6 +6515,9 @@ return 0;
         EEprom_ADDR = EEPROM.read(11);  //Adresse des zu verwendenden EEProms
         //SCL_RTC = EEPROM.read(12);
       }
+      // --- auf Platz 15 im EEPROM steht das Keyboard-Layout
+      byte k = EEPROM.read(15);
+      if (k > 0 && k < 10) Keyboard_lang = k;
 
       // --- ist der Theme_marker (77) auf Platz 17 gesetzt, dann das gespeicherte Theme setzen
       if (EEPROM.read(17) == 77) {
@@ -6511,9 +6554,9 @@ return 0;
 
     VGAController.begin();                                                                //VGA-Variante //64 Farben
     byte vm = EEPROM.read(6);                                                             //Videomodus lesen
-    switch ( vm ){
+    switch ( vm ) {
       case 0:
-        VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung 
+        VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung
         //Theme_state = 2;
         break;
       case 1:
@@ -6521,24 +6564,24 @@ return 0;
         //Theme_state = 0;
         break;
       case 2:
-        VGAController.setResolution(VGA_320x200_60Hz,256,192);                             //ZX-Spectrum, TI99
+        VGAController.setResolution(VGA_320x200_60Hz, 256, 192);                           //ZX-Spectrum, TI99
         //Theme_state = 4;
         break;
       case 3:
-        VGAController.setResolution(VGA_400x300_60Hz,320,256);                             //KC85
+        VGAController.setResolution(VGA_400x300_60Hz, 320, 256);                           //KC85
         //Theme_state = 6;
         break;
       case 4:
-        VGAController.setResolution(VGA_320x200_60Hz,320,192);                             //Atari 800XL
+        VGAController.setResolution(VGA_320x200_60Hz, 320, 192);                           //Atari 800XL
         //Theme_state = 7;
         break;
       default:
-        VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung 
+        VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung
         //Theme_state = 2;
-        break;  
+        break;
     }
-    
-      
+
+
 #else                                                                                 //ILI9341
 
     VGAController.begin(TFT_SCK, TFT_MOSI, TFT_DC, TFT_RESET, TFT_CS, TFT_SPIBUS);
@@ -6553,7 +6596,7 @@ return 0;
 
     Terminal.begin(&VGAController);
     Terminal.connectLocally();                                                           // für Terminal Komandos
-    
+
     //Serial.begin(115200);
 
     set_font(fontsatz);                                                                  // Fontsatz laden (1 Byte)
@@ -6561,7 +6604,7 @@ return 0;
     fbcolor(Vordergrund, Hintergrund);
     tc.setCursorPos(1, 1);
     GFX.clear();
-    //set_theme(Theme_state);  
+    //set_theme(Theme_state);
     if (Theme_marker) set_theme(Theme_state);                                            //Theme setzen, wenn im EEprom gespeichert
 
     PS2Controller.keyboard()-> onVirtualKey = [&](VirtualKey * vk, bool keyDown) {
@@ -6613,7 +6656,14 @@ return 0;
         }
         *vk = VirtualKey::VK_NONE;
       }
-      
+      /*
+            else if (*vk == VirtualKey::VK_F11) {                                              //PSRAM-Löschen (Test)
+              if (keyDown) {
+                //SPI_FRAM_init();
+              }
+               vk = VirtualKey::VK_NONE;
+            }
+      */
       else if (*vk == VirtualKey::VK_F12) {                                               //F12 = Reboot
         if (keyDown) {
           Terminal.print("Now reboot");
@@ -6675,7 +6725,10 @@ String editorname = "kilo.bin";
 tempname.toCharArray(tempstring, tempname.length() + 1);
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);
-
+    while (!SD.begin( kSD_CS, spiSD)) {
+      syntaxerror(sderrormsg);
+      delay(3000);
+    }
     // remove the old file if it exists
     if (SD.exists( String(sd_pfad) + String(tempstring))) {          //Datei existiert schon?,dann überschreiben
       SD.remove( String(sd_pfad) + String(tempstring));             //Datei löschen
@@ -6716,6 +6769,10 @@ tempname.toCharArray(tempstring, tempname.length() + 1);
     tempname.toCharArray(tempstring, tempname.length() + 1);  //Dateiname tmp.Bas nach tempstring kopieren
 
     spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+    while (!SD.begin( kSD_CS, spiSD)) {
+      syntaxerror(sderrormsg);
+      delay(3000);
+    }
 
     if ( !SD.exists(String(sd_pfad) + String(tempstring)))    //Datei vorhanden?
     {
@@ -7453,6 +7510,15 @@ nochmal:
           set_font(p[0]);                 //setze Font
           break;
 
+        case OPT_KEYBOARD:
+          p[0] = get_value();
+          EEPROM.write(15, p[0]);         //Keyboard-Layout im Flash speichern                    Platz 15
+          EEPROM.commit () ;
+          Terminal.println("For take effect now reboot!");
+          delay(1000);
+          ESP.restart();
+          break;
+
         case OPT_COLOR:
           p[0] = get_value();
           if (Test_char(',')) return 1;
@@ -7944,6 +8010,10 @@ nochmal:
 
 
       spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+      while (!SD.begin( kSD_CS, spiSD)) {
+        syntaxerror(sderrormsg);
+        delay(3000);
+      }
       // remove the old file if it exists
       if ( SD.exists( String(sd_pfad) + String(tempstring))) {
         printmsg("File exist, overwrite? (y/n)", 0);
@@ -7998,7 +8068,10 @@ nochmal:
       char k;
 
       spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);             //SCK,MISO,MOSI,SS 13 //HSPI1
-
+      while (!SD.begin( kSD_CS, spiSD)) {
+        syntaxerror(sderrormsg);
+        delay(3000);
+      }
       if ( !SD.exists(String(sd_pfad) + String(file)))
       {
         syntaxerror(sdfilemsg);
@@ -8089,6 +8162,11 @@ nochmal:
       rest = n % 1024;
 
       spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+      while (!SD.begin( kSD_CS, spiSD)) {
+        syntaxerror(sderrormsg);
+        delay(3000);
+      }
+
       // remove the old file if it exists
       if ( SD.exists( String(sd_pfad) + String(tempstring))) {
         printmsg("File exist, overwrite? (y/n)", 0);
@@ -8120,6 +8198,11 @@ nochmal:
         spi_fram.read(adr, c, 1024);
         adr += 1024;
         spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+        while (!SD.begin( kSD_CS, spiSD)) {
+          syntaxerror(sderrormsg);
+          delay(3000);
+        }
+
         fp = SD.open( String(sd_pfad) + String(file), FILE_APPEND);
         for (int s = 0; s < 1024; s++) {
           fp.write( c[s] );
@@ -8130,6 +8213,11 @@ nochmal:
       if (rest > 0) {
         spi_fram.read(adr, c, rest);
         spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+        while (!SD.begin( kSD_CS, spiSD)) {
+          syntaxerror(sderrormsg);
+          delay(3000);
+        }
+
         fp = SD.open( String(sd_pfad) + String(file), FILE_APPEND);
         for (int s = 0; s < rest; s++) {
           fp.write( c[s] );
@@ -8148,6 +8236,11 @@ nochmal:
       long n, sc = 0;
 
       spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+      while (!SD.begin( kSD_CS, spiSD)) {
+        syntaxerror(sderrormsg);
+        delay(3000);
+      }
+
       if ( !SD.exists(String(sd_pfad) + String(tempstring)))
       {
         syntaxerror(sdfilemsg);
@@ -8170,6 +8263,11 @@ nochmal:
 
       for (int i = 0; i < durchlaeufe; i++) {
         spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+        while (!SD.begin( kSD_CS, spiSD)) {
+          syntaxerror(sderrormsg);
+          delay(3000);
+        }
+
         fp = SD.open( String(sd_pfad) + String(file), FILE_READ);
         fp.seek(sc);
         for (int s = 0; s < 1024; s++) {
@@ -8183,6 +8281,11 @@ nochmal:
       }
       if (rest > 0) {
         spiSD.begin(kSD_CLK, kSD_MISO, kSD_MOSI, kSD_CS);         //SCK,MISO,MOSI,SS 13 //HSPI1
+        while (!SD.begin( kSD_CS, spiSD)) {
+          syntaxerror(sderrormsg);
+          delay(3000);
+        }
+
         fp = SD.open( String(sd_pfad) + String(file), FILE_READ);
         fp.seek(sc);
         for (int s = 0; s < rest; s++) {
@@ -8769,6 +8872,9 @@ nochmal:
       Terminal.write("BuiltTime : ");
       Terminal.write(BuiltTime);
       Terminal.println();
+      Terminal.write("Release   : ");
+      Terminal.write(BasicVersion);
+      Terminal.println();
       Terminal.write("Keyboard  : ");
       Terminal.print(Keyboard_lang, DEC);
       Terminal.write("=");
@@ -8809,35 +8915,35 @@ nochmal:
     }
 
     //------------------------------------------------------- Testbereich ARC-Befehl ------------------------------------------------------------------
-/*
-    const int cos_tab[360] = {
-      1000, 1000, 999, 999, 998, 996, 995, 993, 990, 988, 985, 982, 978, 974, 970, 966,
-      961, 956, 951, 946, 940, 934, 927, 921, 914, 906, 899, 891, 883, 875, 866, 857,
-      848, 839, 829, 819, 809, 799, 788, 777, 766, 755, 743, 731, 719, 707, 695, 682,
-      669, 656, 643, 629, 616, 602, 588, 574, 559, 545, 530, 515, 500, 485, 469, 454,
-      438, 423, 407, 391, 375, 358, 342, 326, 309, 292, 276, 259, 242, 225, 208, 191,
-      174, 156, 139, 122, 105, 87, 70, 52, 35, 17, 0, -17, -35, -52, -70, -87, -105,
-      -122, -139, -156, -174, -191, -208, -225, -242, -259, -276, -292, -309, -326,
-      -342, -358, -375, -391, -407, -423, -438, -454, -469, -485, -500, -515, -530,
-      -545, -559, -574, -588, -602, -616, -629, -643, -656, -669, -682, -695, -707,
-      -719, -731, -743, -755, -766, -777, -788, -799, -809, -819, -829, -839, -848,
-      -857, -866, -875, -883, -891, -899, -906, -914, -921, -927, -934, -940, -946,
-      -951, -956, -961, -966, -970, -974, -978, -982, -985, -988, -990, -993, -995,
-      -996, -998, -999, -999, -1000, -1000, -1000, -999, -999, -998, -996, -995, -993,
-      -990, -988, -985, -982, -978, -974, -970, -966, -961, -956, -951, -946, -940,
-      -934, -927, -921, -914, -906, -899, -891, -883, -875, -866, -857, -848, -839,
-      -829, -819, -809, -799, -788, -777, -766, -755, -743, -731, -719, -707, -695,
-      -682, -669, -656, -643, -629, -616, -602, -588, -574, -559, -545, -530, -515,
-      -500, -485, -469, -454, -438, -423, -407, -391, -375, -358, -342, -326, -309,
-      -292, -276, -259, -242, -225, -208, -191, -174, -156, -139, -122, -105, -87,
-      -70, -52, -35, -17, 0, 17, 35, 52, 70, 87, 105, 122, 139, 156, 174, 191, 208,
-      225, 242, 259, 276, 292, 309, 326, 342, 358, 375, 391, 407, 423, 438, 454, 469,
-      485, 500, 515, 530, 545, 559, 574, 588, 602, 616, 629, 643, 656, 669, 682, 695,
-      707, 719, 731, 743, 755, 766, 777, 788, 799, 809, 819, 829, 839, 848, 857, 866,
-      875, 883, 891, 899, 906, 914, 921, 927, 934, 940, 946, 951, 956, 961, 966, 970,
-      974, 978, 982, 985, 988, 990, 993, 995, 996, 998, 999, 999, 1000
-    };
-*/
+    /*
+        const int cos_tab[360] = {
+          1000, 1000, 999, 999, 998, 996, 995, 993, 990, 988, 985, 982, 978, 974, 970, 966,
+          961, 956, 951, 946, 940, 934, 927, 921, 914, 906, 899, 891, 883, 875, 866, 857,
+          848, 839, 829, 819, 809, 799, 788, 777, 766, 755, 743, 731, 719, 707, 695, 682,
+          669, 656, 643, 629, 616, 602, 588, 574, 559, 545, 530, 515, 500, 485, 469, 454,
+          438, 423, 407, 391, 375, 358, 342, 326, 309, 292, 276, 259, 242, 225, 208, 191,
+          174, 156, 139, 122, 105, 87, 70, 52, 35, 17, 0, -17, -35, -52, -70, -87, -105,
+          -122, -139, -156, -174, -191, -208, -225, -242, -259, -276, -292, -309, -326,
+          -342, -358, -375, -391, -407, -423, -438, -454, -469, -485, -500, -515, -530,
+          -545, -559, -574, -588, -602, -616, -629, -643, -656, -669, -682, -695, -707,
+          -719, -731, -743, -755, -766, -777, -788, -799, -809, -819, -829, -839, -848,
+          -857, -866, -875, -883, -891, -899, -906, -914, -921, -927, -934, -940, -946,
+          -951, -956, -961, -966, -970, -974, -978, -982, -985, -988, -990, -993, -995,
+          -996, -998, -999, -999, -1000, -1000, -1000, -999, -999, -998, -996, -995, -993,
+          -990, -988, -985, -982, -978, -974, -970, -966, -961, -956, -951, -946, -940,
+          -934, -927, -921, -914, -906, -899, -891, -883, -875, -866, -857, -848, -839,
+          -829, -819, -809, -799, -788, -777, -766, -755, -743, -731, -719, -707, -695,
+          -682, -669, -656, -643, -629, -616, -602, -588, -574, -559, -545, -530, -515,
+          -500, -485, -469, -454, -438, -423, -407, -391, -375, -358, -342, -326, -309,
+          -292, -276, -259, -242, -225, -208, -191, -174, -156, -139, -122, -105, -87,
+          -70, -52, -35, -17, 0, 17, 35, 52, 70, 87, 105, 122, 139, 156, 174, 191, 208,
+          225, 242, 259, 276, 292, 309, 326, 342, 358, 375, 391, 407, 423, 438, 454, 469,
+          485, 500, 515, 530, 545, 559, 574, 588, 602, 616, 629, 643, 656, 669, 682, 695,
+          707, 719, 731, 743, 755, 766, 777, 788, 799, 809, 819, 829, 839, 848, 857, 866,
+          875, 883, 891, 899, 906, 914, 921, 927, 934, 940, 946, 951, 956, 961, 966, 970,
+          974, 978, 982, 985, 988, 990, 993, 995, 996, 998, 999, 999, 1000
+        };
+    */
     void drawArcP(Point pnt[], int &npnt)
     {
       if ( npnt == 0) npnt++;
@@ -8854,16 +8960,16 @@ nochmal:
 
       for ( int n = gr_start; n <= gr_end; n += 1)
       {
-        pnt[npnt].X = x + (cos((n%360)*M_PI/180)*r_min * 1000 ) / 800;
+        pnt[npnt].X = x + (cos((n % 360) * M_PI / 180) * r_min * 1000 ) / 800;
         //pnt[npnt].X = x + (cos_tab[n % 360] * r_min) / 800;
-        pnt[npnt].Y = y + (cos(((n + 270)%360) * M_PI/180) * r_min ) ;// 1000;
+        pnt[npnt].Y = y + (cos(((n + 270) % 360) * M_PI / 180) * r_min ) ; // 1000;
         //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_min) / 1000;
         drawArcP(pnt, npnt);
       }
       for ( int n = gr_end; n >= gr_start; n -= 1)
-      { pnt[npnt].X = x + (cos((n%360)*M_PI/180)*r_max * 1000) / 800;//cos_tab[n % 360] * r_max) / 800;
+      { pnt[npnt].X = x + (cos((n % 360) * M_PI / 180) * r_max * 1000) / 800; //cos_tab[n % 360] * r_max) / 800;
         //pnt[npnt].X = x + (cos_tab[n % 360] * r_max) / 800;
-        pnt[npnt].Y = y + (cos(((n + 270)%360)* M_PI/180) * r_max) ;/// 1000;
+        pnt[npnt].Y = y + (cos(((n + 270) % 360) * M_PI / 180) * r_max) ; /// 1000;
         //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_max) / 1000;
         drawArcP(pnt, npnt);
       }
