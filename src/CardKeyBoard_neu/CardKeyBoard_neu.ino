@@ -18,8 +18,9 @@
 // **********************************************************************************************************************************
 // * noch startet der Tastatur treiber nicht immer korrekt -> behoben (siehe loop kayboard.available() - variable startup - wird gesetzt
 // * funktioniert aber nur beim Einschalten - Resetverbindung zur Hostanwendung würde beim Reset die Variable zurücksetzen
-// * Auto-Repeat hinzugefügt
-// * Funktion soweit zufriedenstellend 
+// * Auto-Repeat hinzugefügt - noch nicht perfekt - irgendwie stimmt das Timing noch nicht
+// * Funktion soweit zufriedenstellend - Start der Tastatur jetzt auch zuverlässig
+// * Ctrl-Taste implementiert - Fn einfach dient als Ctrl-Taste (nur Buchstaben a-z)
 //
 #include <Adafruit_NeoPixel.h>
 #include <ps2dev.h>
@@ -45,59 +46,69 @@ PS2dev keyboard(KB_CLK, KB_DATA); // PS/2
 //shift: d12
 //fn: d14
 
-int16_t old_no;
-int dl,startup=0;
+int16_t old_no, first_no;
+int dl, startup = 0;
+
+#define shiftPressed (PINB & 0x10 ) != 0x10
+#define symPressed (PINB & 0x80 ) != 0x80
+#define fnPressed (PINB & 0x40 ) != 0x40
+
+int _shift = 0, _fn = 0, _sym = 0, ctrl = 0, idle = 0;
+unsigned char KEY = 0, hadPressed = 0, repeatkey = 0;
+int Mode = 0; //0->normal.1->shift 2->long_shift, 3->sym, 4->long_sym 5->fn,6->long_fn
+
+
 
 unsigned char KeyMap[48][7] =
 { //nor, shift,long_shift, sym,long_sym,fn,long_fn,
-  {  27,  27,  27,  27,  27, 128, 128},//esc
-  { '1', '1', '1', '!', '!', 129, 129},//1
-  { '2', '2', '2', '"', '"', 130, 130},//2
-  { '3', '3', '3', '\'', '\'', 131, 131},//3
-  { '4', '4', '4', '$', '$', 132, 132},//4
-  { '5', '5', '5', '%', '%', 133, 133},//5
-  { '6', '6', '6', '&', '&', 134, 134},//6
-  { '7', '7', '7', '/', '/', 135, 135},//7
-  { '8', '8', '8', '(', '(', 136, 136},//8
-  { '9', '9', '9', ')', ')', 137, 137},//9
-  { '0', '0', '0', '=', '=', 138, 138},//0
-  {  8 , 127 , 127,  8 ,  8 , 139, 139}, //del
-  {  9 ,  9 ,  9 ,  9 ,  9 , 140, 140},//tab
-  { 'q', 'Q', 'Q', '{', '{', 141, 141},//q
-  { 'w', 'W', 'W', '}', '}', 142, 142},//w
-  { 'e', 'E', 'E', '+', '+', 143, 143},//e
-  { 'r', 'R', 'R', '#', '#', 144, 144},//r
-  { 't', 'T', 'T', '[', '[', 145, 145},//t
-  { 'y', 'Y', 'Y', ']', ']', 146, 146}, //y
-  { 'u', 'U', 'U', '|', '|', 147, 147},//u
-  { 'i', 'I', 'I', '~', '~', 148, 148},//i
-  { 'o', 'O', 'O', '^', '^', 149, 149}, //o
-  { 'p', 'P', 'P', '*', '*', 150, 150},//p
-  {  0 ,  0 ,  0 ,  0 ,  0 , 0, 0},    //  no key
-  {  180,  180,  180,  180,  180, 152, 152},//LEFT
-  {  181,  181,  181,  181,  181, 153, 153},//UP
-  { 'a', 'A', 'A', '<', '<', 154, 154},//a
-  { 's', 'S', 'S', '>', '>', 155, 155},//s
-  { 'd', 'D', 'D', '@', '@', 156, 156},//d
-  { 'f', 'F', 'F', 0, 0, 157, 157},//f
-  { 'g', 'G', 'G', '-', '-', 158, 158},//g
-  { 'h', 'H', 'H', '_', '_', 159, 159},//h
-  { 'j', 'J', 'J', 0, 0, 160, 160},//j
-  { 'k', 'K', 'K', '?', '?', 161, 161},//k
-  { 'l', 'L', 'L',   0,   0, 162, 162},//l
-  { 13 , 13 ,  13,  13,  13, 163, 163},//enter
-  {  182, 182 ,  182,  182,  182, 164, 164},//DOWN
-  {  183, 183 ,  183,  183,  183, 165, 165},//RIGHT
-  { 'z', 'Z', 'Z',  0 ,  0 , 166, 166},//z
-  { 'x', 'X', 'X',  0 ,  0 , 167, 167},//x
-  { 'c', 'C', 'C',  0 ,  0 , 168, 168},//c
-  { 'v', 'V', 'V',  0 ,  0 , 169, 169},//v
-  { 'b', 'B', 'B',  0 ,  0 , 170, 170},//b
-  { 'n', 'N', 'N',  0 ,  0 , 171, 171},//n
-  { 'm', 'M', 'M',  0 ,  0 , 172, 172},//m
-  { ',', ',', ',', ';', ';', 173, 173},//,
-  { '.', '.', '.', ':', ':', 174, 174},//.
-  { ' ' , ' ', ' ', ' ', ' ', 175, 175}//space
+  {  27,  27,  27,  27,  27, 128, 128},//esc  0
+  { '1', '1', '1', '!', '!', 129, 129},//1    1
+  { '2', '2', '2', '"', '"', 130, 130},//2    2
+  { '3', '3', '3', '\'', '\'', 131, 131},//3  3
+  { '4', '4', '4', '$', '$', 132, 132},//4    4
+  { '5', '5', '5', '%', '%', 133, 133},//5    5
+  { '6', '6', '6', '&', '&', 134, 134},//6    6
+  { '7', '7', '7', '/', '/', 135, 135},//7    7
+  { '8', '8', '8', '(', '(', 136, 136},//8    8
+  { '9', '9', '9', ')', ')', 137, 137},//9    9
+  { '0', '0', '0', '=', '=', 138, 138},//0    10
+  {  8 , 127 , 127,  8 ,  8 , 139, 139}, //del11
+  {  9 ,  9 ,  9 ,  9 ,  9 , 140, 140},//tab  12
+  { 'q', 'Q', 'Q', '{', '{', 141, 141},//q    13
+  { 'w', 'W', 'W', '}', '}', 142, 142},//w    14
+  { 'e', 'E', 'E', '+', '+', 143, 143},//e    15
+  { 'r', 'R', 'R', '#', '#', 144, 144},//r    16
+  { 't', 'T', 'T', '[', '[', 145, 145},//t    17
+  { 'y', 'Y', 'Y', ']', ']', 146, 146}, //y   18
+  { 'u', 'U', 'U', '|', '|', 147, 147},//u    19
+  { 'i', 'I', 'I', '~', '~', 148, 148},//i    20
+  { 'o', 'O', 'O', '^', '^', 149, 149}, //o   21
+  { 'p', 'P', 'P', '*', '*', 150, 150},//p    22
+  {  0 ,  0 ,  0 ,  0 ,  0 , 0, 0},    //  no key 23
+  {  180,  180,  180,  180,  180, 152, 152},//LEFT 24
+  {  181,  181,  181,  181,  181, 153, 153},//UP    25
+  { 'a', 'A', 'A', '<', '<', 154, 154},//a    26
+  { 's', 'S', 'S', '>', '>', 155, 155},//s    27
+  { 'd', 'D', 'D', '@', '@', 156, 156},//d    28
+  { 'f', 'F', 'F', 0, 0, 157, 157},//f        29
+  { 'g', 'G', 'G', '-', '-', 158, 158},//g    30
+  { 'h', 'H', 'H', '_', '_', 159, 159},//h    40
+  { 'j', 'J', 'J', 0, 0, 160, 160},//j        41
+  { 'k', 'K', 'K', '?', '?', 161, 161},//k    42
+  { 'l', 'L', 'L',   0,   0, 162, 162},//l    43
+  { 13 , 13 ,  13,  13,  13, 163, 163},//enter  44
+  {  182, 182 ,  182,  182,  182, 164, 164},//DOWN  45
+  {  183, 183 ,  183,  183,  183, 165, 165},//RIGHT 46
+  { 'z', 'Z', 'Z',  0 ,  0 , 166, 166},//z    47
+  { 'x', 'X', 'X',  0 ,  0 , 167, 167},//x    48
+  { 'c', 'C', 'C',  0 ,  0 , 168, 168},//c    49
+  { 'v', 'V', 'V',  0 ,  0 , 169, 169},//v    50
+  { 'b', 'B', 'B',  0 ,  0 , 170, 170},//b    51
+  { 'n', 'N', 'N',  0 ,  0 , 171, 171},//n    52
+  { 'm', 'M', 'M',  0 ,  0 , 172, 172},//m    53
+  { ',', ',', ',', ';', ';', 173, 173},//,    54
+  { '.', '.', '.', ':', ':', 174, 174},//.    55
+  { ' ' , ' ', ' ', ' ', ' ', 175, 175}//space 56
 };
 
 // ASCII-Code-zu-Scan-Code-Konvertierungstabelle
@@ -140,7 +151,7 @@ unsigned char ScanMap[121][3] = {
   { 62, 1, 0x49 } , // >
   { 63, 1, 0x4A } , // ?
   { 64, 0, 0x54 } , // @
-  { 65, 1, 0x1C } , // A
+  { 65, 1, 0x1C } , // A   //37
   { 66, 1, 0x32 } , // B
   { 67, 1, 0x21 } , // C
   { 68, 1, 0x23 } , // D
@@ -173,7 +184,7 @@ unsigned char ScanMap[121][3] = {
   { 94, 0, 0x55 } , // ^
   { 95, 1, 0x51 } , // _
   { 96, 1, 0x54 } , // `
-  { 97, 0, 0x1C } , // a
+  { 97, 0, 0x1C } , // a      //70
   { 98, 0, 0x32 } , // b
   { 99, 0, 0x21 } , // c
   { 100, 0, 0x23 } , // d
@@ -198,7 +209,7 @@ unsigned char ScanMap[121][3] = {
   { 119, 0, 0x1D } , // w
   { 120, 0, 0x22 } , // x
   { 121, 0, 0x1A } , // y
-  { 122, 0, 0x35 } , // z
+  { 122, 0, 0x35 } , // z     //95
   { 123, 1, 0x5B } , // {
   { 124, 1, 0x6A } , // |
   { 125, 1, 0x5D } , // }
@@ -252,7 +263,7 @@ int keyboardcommand(int command) {
   switch (command) {
     case 0xFF:
       ack();// Reset: Befehl zum Zurücksetzen der Tastatur. Gibt ACK zurück, wenn es korrekt empfangen wurde.
-      while(keyboard.write(0xAA)!=0);
+      while (keyboard.write(0xAA) != 0);
       break;
     case 0xFE: // Anfrage erneut senden
       ack();
@@ -273,7 +284,7 @@ int keyboardcommand(int command) {
       break;
     case 0xF3: //set typematic rate/delay :
       ack();
-      if(!keyboard.read(&val)) ack(); //do nothing with the rate
+      if (!keyboard.read(&val)) ack(); //do nothing with the rate
       break;
     case 0xF2: //get device id :
       ack();
@@ -282,7 +293,7 @@ int keyboardcommand(int command) {
       break;
     case 0xF0: //set scan code set
       ack();
-      if(!keyboard.read(&val)) ack(); //do nothing with the rate
+      if (!keyboard.read(&val)) ack(); //do nothing with the rate
       break;
     case 0xEE: //echo :Wenn eine Tastatur angeschlossen ist, reagiert die Tastatur auf den Computer.（ECHO Response）Gib es zurück.
       //ack();
@@ -290,18 +301,44 @@ int keyboardcommand(int command) {
       break;
     case 0xED: //set/reset LEDs :Anfrage zum Ein-/Ausschalten der Tastatur-LED. Geben Sie die LED mit dem folgenden Optionsbyte an.
       ack();
-      if(!keyboard.read(&val)) ack();; //do nothing with the rate
+      if (!keyboard.read(&val)) ack();; //do nothing with the rate
       ack();
       return 1;
       break;
   }
-return 1;
+  return 1;
 }
 
 // Scancode senden
 // break
 // no : Datensatznummer der Scancode-Tabelle
-void sendScanCode(int16_t no) {
+void sendScanCode(int16_t no, int rpt_flag) {
+  //****************** Repeat funktion- Test *****************************
+
+  if (rpt_flag == 1) {
+    if (ScanMap[no][1] & 1) {
+      // Wenn die Umschalttaste zusammen verwendet wird, senden Sie zuerst den Scancode der rechten Umschalttaste.
+      keyboard.write(0x59);
+    }
+
+    keyboard.write(ScanMap[no][2]);
+    delay(10);
+    return;
+  }
+
+  if (rpt_flag == 2) {
+    keyboard.write(0xf0);
+    keyboard.write(ScanMap[no][2]);
+    if (ScanMap[no][1] & 1) {
+      // Wenn die Umschalttaste zusammen verwendet wird, senden Sie zuletzt den Scancode der rechten Umschalttaste.
+      keyboard.write(0xf0);
+      keyboard.write(0x59);
+    }
+    delay(10);
+    return;
+  }
+  //****************** Repeat funktion- Test *****************************
+
 
   // Code senden
   if (ScanMap[no][1] & 1) {
@@ -309,41 +346,48 @@ void sendScanCode(int16_t no) {
     keyboard.write(0x59);
   }
 
-
   if (ScanMap[no][1] & 2) {
     // 2-Byte-Scancode
     keyboard.write(0xe0);
   }
 
-  //keyboard.write(ScanMap[no][2]);
+  if (ctrl == 1) {
+    if (no > 69 && no < 96)
+    {
+      keyboard.write(0x14);
+    }
+    else ctrl = 0;                            //ctrl-Marker löschen, wenn nicht a-z gedrückt
+  }
+
   keyboard.keyboard_mkbrk(ScanMap[no][2]);
-  delay(10);
 
   // Break Code senden
   if (ScanMap[no][1] & 2) {
     // 2-Byte-Scancode
     keyboard.write(0xe0);
-    
+
   }
   keyboard.write(0xf0);
   keyboard.write(ScanMap[no][2]);
-  delay(10);
+  //delay(10);
 
   if (ScanMap[no][1] & 1) {
     // Wenn die Umschalttaste zusammen verwendet wird, senden Sie zuletzt den Scancode der rechten Umschalttaste.
     keyboard.write(0xf0);
     keyboard.write(0x59);
   }
-  delay(10);
+
+  if (ctrl == 1) {
+    if (no > 69 && no < 96)
+    {
+      keyboard.write(0xf0);
+      keyboard.write(0x14);              //FN - Key als Cntrl - Key
+    }
+    ctrl = 0;                            //ctrl-Marker löschen
+  }
+
 }
 
-#define shiftPressed (PINB & 0x10 ) != 0x10
-#define symPressed (PINB & 0x80 ) != 0x80
-#define fnPressed (PINB & 0x40 ) != 0x40
-
-int _shift = 0, _fn = 0, _sym = 0, idle = 0;
-unsigned char KEY = 0, hadPressed = 0;
-int Mode = 0; //0->normal.1->shift 2->long_shift, 3->sym, 4->long_sym 5->fn,6->long_fn
 
 void flashOn() {
   pixels.setPixelColor(0, pixels.Color(3, 3, 3)); pixels.show();
@@ -371,7 +415,7 @@ void setup() {
 
   pixels.begin();
   keyboard.keyboard_init();
-  
+
 }
 
 unsigned char GetInput() {
@@ -380,9 +424,7 @@ unsigned char GetInput() {
   digitalWrite(A2, HIGH);
   digitalWrite(A1, HIGH);
   digitalWrite(A0, HIGH);
-  //delay(2);
   if (PIND != 0xff) {
-    //flashOn();
     switch (PIND)   {
       case 254: k = 1; break; //ESC
       case 253: k = 2; break; // 1
@@ -393,41 +435,26 @@ unsigned char GetInput() {
       case 191: k = 7; break; //6
       case 127: k =  8; break; //7
     }
-    /*
-      flashOff();
-      if (k) {
-      hadPressed = 1;
-      return k;
-      }
-    */
   }
   else if (PIND != 223) {
-    //flashOn();
-    //delay(200);
     switch (PINB)   {
       case 222: k = 9; break; //8
       case 221: k = 10; break; //9
       case 219: k = 11; break; //0
       case 215: k = 12; break; //Del
     }
-
-
   }
-  //delay(200);
-  //flashOff();
   if (k) {
     hadPressed = 1;
     return k;
   }
 
+
   digitalWrite(A3, HIGH);
   digitalWrite(A2,  LOW);
   digitalWrite(A1, HIGH);
   digitalWrite(A0, HIGH);
-  //delay(2);
   if (PIND != 0xff) {
-    //flashOn();
-    //delay(200);
     switch (PIND)   {
       case 254: k = 13; break; //Tab
       case 253: k = 14; break; //Q
@@ -438,14 +465,9 @@ unsigned char GetInput() {
       case 191: k = 19; break; //Y
       case 127: k = 20; break; //U
     }
-    //flashOff();
-    //if (k) {
-    //  hadPressed = 1;
-    //  return k;
-    // }
   }
   else if (PIND != 223) {
-    //flashOn();
+
     switch (PINB)   {
       case 222: k = 21; break; //I
       case 221: k = 22; break; //O
@@ -454,24 +476,17 @@ unsigned char GetInput() {
     }
 
   }
-  //delay(200);
-  //flashOff();
   if (k) {
     hadPressed = 1;
     return k;
   }
 
 
-
-
   digitalWrite(A3, HIGH);
   digitalWrite(A2, HIGH);
   digitalWrite(A1, LOW);
   digitalWrite(A0, HIGH);
-  //delay(2);
   if (PIND != 0xff) {
-    //flashOn();
-    //delay(200);
     switch (PIND)   {
       case 254: k = 25; break; //left
       case 253: k = 26; break; //up
@@ -482,16 +497,9 @@ unsigned char GetInput() {
       case 191: k = 31; break; //G
       case 127: k =  32; break; //H
     }
-    //flashOff();
-    //if (k) {
-    //  hadPressed = 1;
-    //  return k;
-    //}
   }
 
   else if (PIND != 223) {
-    //flashOn();
-    //delay(200);
     switch (PINB)   {
       case 222: k = 33; break; //J
       case 221: k = 34; break; //K
@@ -499,22 +507,19 @@ unsigned char GetInput() {
       case 215: k = 36; break; //Enter
     }
   }
-  //flashOff();
   if (k) {
     hadPressed = 1;
     return k;
-
   }
+
 
   digitalWrite(A3, HIGH);
   digitalWrite(A2, HIGH);
   digitalWrite(A1, HIGH);
   digitalWrite(A0, LOW);
-  //delay(2);
+
 
   if (PIND != 0xff) {
-    //flashOn();
-    //delay(200);
 
     switch (PIND)   {
       case 254: k = 37; break; //down
@@ -526,16 +531,8 @@ unsigned char GetInput() {
       case 191: k = 43; break; //B
       case 127: k = 44; break; //N
     }
-    //flashOff();
-
-    //if (k) {
-    //  hadPressed = 1;
-    //  return k;
-    //}
   }
   else if (PIND != 223) {
-    //flashOn();
-    //delay(200);
     switch (PINB)   {
       case 222: k = 45; break; //M
       case 221: k = 46; break; //,
@@ -543,34 +540,45 @@ unsigned char GetInput() {
       case 215: k = 48; break; //Space
     }
   }
-
-  else {
-    hadPressed = 0;
-    return 255;
-  }
-  //flashOff();
+  /*
+    else {
+      hadPressed = 0;
+      hadRelease = 1;
+      return 255;
+    }
+  */
   if (k) {
     hadPressed = 1;
     return k;
   }
+
+  hadPressed = 0;
+  return 255;
+
 }
 
 
 void loop() {
   unsigned char cmd;  // Vom Host gesendete Daten
-  
-  if(keyboard.available() || startup==0){
-      while (keyboard.read(&cmd)) ;
-      startup = keyboardcommand(cmd);//a=keyboard.keyboard_reply(cmd,0);
-      if(startup) {pixels.setPixelColor(0, pixels.Color(30, 0, 30)); pixels.show(); delay(500);} //zeigt Initialisierung mit lila LED an
+  bool fl = false;
+  if (keyboard.available() || startup == 0) {
+    while (keyboard.read(&cmd)) ;
+    startup = keyboardcommand(cmd);//a=keyboard.keyboard_reply(cmd,0);
+    if (startup) {
+      pixels.setPixelColor(0, pixels.Color(30, 0, 30));  //zeigt Initialisierung mit lila LED an
+      pixels.show();
+      delay(500);
+    }
   }
-  
+
   if (shiftPressed)   {
+
     _sym = 0; _fn = 0; idle = 0;
-    //while (shiftPressed)delay(1);
+    while (shiftPressed)delay(1);
     if (_shift == 0)     {
       delay(300);
       if (shiftPressed)       {
+        while (shiftPressed)delay(1);
         _shift = 2;
         Mode = 2;
       } else  {
@@ -580,6 +588,7 @@ void loop() {
     } else {
       delay(300);
       if (shiftPressed)       {
+        while (shiftPressed)delay(1);
         if (_shift == 2)         {
           Mode = 0;
           _shift = 0;
@@ -596,9 +605,11 @@ void loop() {
 
   if (symPressed)   {
     _shift = 0; _fn = 0; idle = 0;
+    while (symPressed)delay(1);
     if (_sym == 0)     {
       delay(300);
       if (symPressed)       {
+        while (symPressed)delay(1);
         _sym = 2;
         Mode = 4;
       } else  {
@@ -608,6 +619,7 @@ void loop() {
     } else {
       delay(300);
       if (symPressed)  {
+        while (symPressed)delay(1);
         if (_sym == 2)  {
           Mode = 0;
           _sym = 0;
@@ -624,21 +636,27 @@ void loop() {
 
   if (fnPressed) {
     _sym = 0; _shift = 0; idle = 0;
+    while (fnPressed)delay(1);
     if (_fn == 0) {
+      ctrl = 1;                             //Ctrl-Funktion
       delay(300);
       if (fnPressed) {
+        while (fnPressed)delay(1);
         _fn = 2;
         Mode = 6;
       } else  {
         _fn = 1;
         Mode = 5;
       }
-    } else  {
+    } else
+    {
       delay(300);
       if (fnPressed) {
+        while (fnPressed)delay(1);
         if (_fn == 2) {
           Mode = 0;
           _fn = 0;
+          ctrl = 0;
         } else {
           Mode = 6;
           _fn = 2;
@@ -646,6 +664,7 @@ void loop() {
       } else {
         Mode = 0;
         _fn = 0;
+        ctrl = 0;
       }
     }
   }
@@ -683,16 +702,25 @@ void loop() {
   }
 
   // PS/2 Scancode senden
-  if (hadPressed) {
+  if (hadPressed == 1) {
     uint8_t c = KeyMap[KEY - 1][Mode];
     int16_t no = findScanMap(c);
     if (no >= 0) {
       flashOn();
-      sendScanCode(no);
-      if(old_no != no) {idle=0; delay(200);}            //erstes mal Taste - 200ms Verzögerung 
-      else {idle=0; delay(33);}                         //zweites bis n.tes mal Tastenrepeat 33ms
+      if (old_no != no) {
+        sendScanCode(no, 0);  //erstes mal Taste - 200ms Verzögerung
+        first_no = no;
+        repeatkey = 0;
+        delay(230);
+      }
+      else {
+        sendScanCode(no, 1);  //zweites bis n.tes mal Tastenrepeat 33ms
+        repeatkey = 1;
+        delay(70);
+      }
       old_no = no;
     }
+
     flashOff();
     if ((Mode == 1) || (Mode == 3) || (Mode == 5)) {
       Mode = 0;
@@ -701,14 +729,23 @@ void loop() {
       _fn = 0;
     }
     hadPressed = 0;
-
   }
 
-  idle++;
-  if(idle > 300) {                                       //verhindert, das wenn man die gleiche Taste nach etwa 300ms nochmal drückt der Repeatmodus ausgeschaltet ist, das verhindert doppelte Zeichen
-    old_no = 255;
-    idle=0;
+
+  if (hadPressed == 0) idle++;
+  if (idle > 30) {                             //verhindert, das wenn man die gleiche Taste nach etwa 300ms nochmal drückt der Repeatmodus eingeschaltet ist, das verhindert doppelte Zeichen
+    if (old_no == first_no && repeatkey == 1 ) sendScanCode(first_no, 2);
+    old_no = -1;
+    first_no = -1;
+    repeatkey = 0;
+
+
+    fl = !fl;
+    if (fl) pixels.setPixelColor(0, pixels.Color(5, 0, 5));  //Lebenspuls - zeigt an, das die Tastatur funktionsfähig ist
+    pixels.show();
+    idle = 0;
   }
-  //delay(dl);
-  //flashOff();
+
+  delay(8);
+
 }

@@ -31,7 +31,7 @@ void IRAM_ATTR kb_interruptHandler(void) {
 
     val = digitalRead(KEYBOARD_DATA);
     now_ms = millis();
-    if (now_ms - prev_ms > 250) {
+    if (now_ms - prev_ms > 200) {
         bitcount = 0;
         incoming = 0;
     }

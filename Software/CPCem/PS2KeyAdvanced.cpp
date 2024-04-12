@@ -228,7 +228,7 @@ else
   val = digitalRead( PS2_DataPin );
   /* timeout catch for glitches reset everything */
   now_ms = millis( );
-  if( now_ms - prev_ms > 250 )
+  if( now_ms - prev_ms > 200 )
     {
     _bitcount = 0;
     _shiftdata = 0;
