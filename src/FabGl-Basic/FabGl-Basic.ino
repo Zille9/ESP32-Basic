@@ -48,8 +48,13 @@
 #define BasicVersion "2.04b"
 #define BuiltTime "07.04.2024"
 // siehe Logbuch.txt zum Entwicklungsverlauf
-// v2.04b:07.04.2024          -
-//                            -
+// v2.04b:07.04.2024          -Card-KB Treiber etwas angepasst (repeatfunktion) - ZX81 funktioniert (etwas hakelig aber es funktioniert) 
+//                            -Tastatur wird jetzt auch zuverlässig erkannt
+//                            -Ctrl-Tasten-Funktion im Card-KB Treiber eingebunden -> Fn + Buchstabe - Ctrl-C somit wieder funktionstüchtig
+//                            -CLEAR löscht jetzt immer die Array-Tabelle (bisher nur, wenn Arrays deklariert waren) - muss vor der ersten Array-Declaration aufgerufen werden (siehe "SOMBRERO.BAS")
+//                            -Anzeigeteil der Systemparameter in separate Datei ausgelagert
+//                            -Befehl GPX erweitert GPX(x,y,<mode>) mode=0 gibt Pixel gesetzt(1) oder nicht(0) zurück, mode=1 gibt Pixelfarbe zurück
+//                            -15972 Zeilen/sek
 //
 // v2.03b:05.04.2024          -Treiber der Eigenbau-Tastatur ist jetzt zufriedenstellend funktionsfähig, dadurch wurde es nötig die Keyboard-Layout - Umschaltung über den OPT-Befehl
 //                            -wieder zugänglich zu machen, das spart die Neucompilierung bei Verwendung unterschiedlicher Tastaturen (Layout steht im EEPROM-Platz 15)
@@ -66,7 +71,7 @@
 //                            -FRAM-Library von Adafruit gekürzt, es wurde die Abfrage der Device-ID deaktiviert. Lt.Datenblatt sollte normaler SPI-RAM und sogar PSRAM ansprechbar sein
 //                            -erste Tests bestätigen die Kompatibilität des Treibers für 23LC1024-SPI-Ram Chips - lesen und schreiben funktioniert
 //                            -neuer Test mit PSRAM 8MB :-D erfolgreich, somit sind 8MB SPI-Speicher verfügbar allerdings funktioniert alles nur im normalen SPI-Modus
-//                            -DPI oder QSPI sind damit natürlich nicht möglich aber hallo - 8MB, was will man mehr - ist sogar schon etwas zuviel, mal sehen, was mir dazu noch einfällt
+//                            -DSPI oder QSPI sind damit natürlich nicht möglich aber hallo - 8MB, was will man mehr - ist sogar schon etwas zuviel, mal sehen, was mir dazu noch einfällt
 //                            -man hat somit 3 unterschiedliche Möglichkeiten der RAM-Unterstützung 128kB-SPI-RAM, 512kB FRAM, 2..4..8MB PSRAM
 //                            -FRAM hat den grossen Vorteil, die Daten im ausgeschalteten Zustand nicht zu verlieren und die gleiche Geschwindigkeit und Schreibzyklen (unbegrenzt) wie SPI-Ram zu haben
 //                            -ARC-Routine umgebaut, es wird keine cos-Tabelle mehr gebraucht - die Konvertierung Rad in Deg wird berechnet, ausserdem ist die Darstellung genauer
@@ -87,60 +92,10 @@
 //                            -Grafikbefehl SWAP erstellt -> vertauscht die Vorder-und Hintergrundfarbe in einen rechteckigen Bereich SWAP x,y,xx,yy
 //                            -16575 Zeilen/sek.
 //
-// v1.99b:03.03.2024          -diverse Definitionen nach cfg.h verschoben (Display-Art, Tastatur-Layout, Pinkonfigurationen usw.)
-//                            -dadurch einige Codezeilen entfernt (ca.50) und einige Options-Funktionen gekürzt (SD-Card-Pins, Tastatur-Layout)
-//                            -Fehler im Editor Kilo entdeckt, wird ein Programm nicht geändert fehlt nach dem Laden im Basic das letzte Zeichen
-//                            -DIR-Ausgabe überarbeitet - jetzt werden versteckte Dateien nicht mehr angezeigt und mitgezählt - (Mac-Besonderheit für jede Datei auch ein Hidden-File anzulegen)
-//                            -SD-Card Betrieb mit TFT-Bildschirm jetzt funktionsfähig, der RAM muss beim Betrieb mit TFT verkleinert werden (siehe cfg.h)
-//                            -15408 Zeilen/sek.
-//
-// v1.98b:21.02.2024          -Update funktioniert auf einmal nicht mehr, was ist das nun wieder ? :-( aus dem Basic laden funktioniert nur zurück nicht !?
-//                            -Fehler endlich gefunden - es lag tatsächlich an der Basic.bin auf der SD-Karte -> neu compiliert und kopiert -> funktioniert!! :D
-//                            -einen kleinen Editor (KILO) von maksimKorzh (thankyou for the little Editor) eingebunden, wird gestartet, wenn EDIT ohne Zeilennummer eingegeben wird
-//                            -das ist zum Programme schreiben etwas komfortaber - mal sehen, wie er sich schlägt.
-//                            -16272 Zeilen/sek.
-//
-// v1.97b:18.02.2024          -RUN-Befehl erweitert RUN"/Filename" lädt und startet ein Basic-Programm -> es wird auf BAS und BIN - Erweiterung überprüft, um ein Basic oder Binärprogramm (Bload) zu starten
-//                            -BLOAD-Befehl entfernt - übernimmt jetzt Load und RUN LOAD"/BIN-FILE" oder RUN"/BINFILE"
-//                            -Start-Befehl entfernt - übernimmt jetzt der Befehl RUN, RUN* lädt und startet ein Programm aus dem FRAM
-//                            -FS.h entfernt -> wird nicht gebraucht
-//                            -Hilfe angepasst
-//
-// v1.96b:11.02.2024          -SD-Card-Aktivitätsanzeige über IO2 realisiert -> leuchtet bei SD-Card-Zugriff auf
-//                            -Keyboard-Initialisierung in setup() mit der Angabe der GPIO-Nummer
-//                            -15924 Zeilen/sek.
-//
-// v1.95b:28.01.2024          -Dir-Befehl erweitert ->DIR"ext" zeigt nur Dateien mit der Dateierweiterung 'ext' an Bsp.:DIR"BAS" listet nur Basic-Programme auf.
-//                            -15924 Zeilen/sek.
-//
-// v1.94b:19.01.2024          -Grafikbefehl FRAME erstellt -> erschafft Rechtecke mit abgerundeten Ecken ohne Fill-Funktion
-//                            -Fehler in getln() entdeckt, wurde nach dem Start die Backspacetaste und Enter gedrückt wurde der ESP32 resettet
-//                            -Eingabezähler hinzugefügt, sollte jetzt nicht mehr passieren
-//                            -15933 Zeilen/sek.
-//
-// v1.93b:13.01.2024          -Taste F10 mit der Ausgabe der mit Option gesicherten Parameter belegt ->Version, BuiltTime, Tastaturlayout, EEProm-Adresse, Arbeitsverzeichnis
-//                            -die restlichen Werte werden beim Start schon angezeigt
-//
-// v1.92b:07.01.2024          -Dump-Ausgabe für ILI9341 angepasst, da hier im Querformat x und y vertauscht sind
-//                            -SD-Karte bisher nicht gleichzeitig mit ILI9341 funktionsfähig !? mal sehen, woran das nun wieder liegt :-(
-//                            -ab und zu wird die CardKB-Tastatur nach dem Reset nicht erkannt -> ein reset-Befehl muss initiiert werden
-//
-// v1.91b:30.12.2023          -CardKB als Tastatur mit PS/2 Software eingebunden (über define auswählbar)
-//                            -kleine Änderungen in der ESC-Behandlung, da es beim CardKB kein Ctrl-C gibt -> ESC hat die gleiche Wirkung
-//                            -mit dem CardKB und dem ILI9341 ist nun eine Pocket-Variante von Basic32+ möglich :-)
-//                            -CardKB funktioniert nicht immer nach dem Reset :-( woran liegt das nun wieder?
-//                            -ESC-Abfrage verbessert, jetzt wird auch bei List-Ausgaben korrekt abgebrochen
-//                            -EEPROM Adresse falsch (0x57), auf dem MCP23017-Board ist der EEPROM auf Adresse 0x50 ->geändert
-//                            -SDA und SCL - Pins jetzt nicht mehr mit OPT IIC änderbar, das führte zu Problemen, da nicht immer korrekte Werte aus dem internen ESP32-Eeprom gelesen wurden
-//                            -15459 Zeilen/sek.
-//
-// v1.90b:24.12.2023          -Fehler in der Datumsbehandlung in ESP32_Time entdeckt -> der Monat wird von 0-11 zurückgegeben, daher wurde in der DIR-Datei-Anzeige der Monat falsch angezeigt
-//
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Konfiguration Grafiktreiber und Akku-Überwachung
 #include "cfg.h"   //********************************************* Konfigurations-Datei *************************************************************
-//#include <WiFi.h>
 #include "fabgl.h" //********************************************* Bibliotheken zur VGA-Signalerzeugung *********************************************
 fabgl::Terminal         Terminal;
 fabgl::LineEditor       LineEditor(&Terminal);
@@ -1800,7 +1755,6 @@ static float expr4(void)
       case  FUNC_PEEK:                          //Peek Byte
       case  FUNC_DEEK:                          //Deek Word
       case  FUNC_FPEEK:                         //FPEEK float
-      case  FUNC_GPIX:                          //GPIX(x,y)
       case  FUNC_MIN:
       case  FUNC_MAX:
         if (Test_char(',')) goto expr4_error;
@@ -1816,7 +1770,16 @@ static float expr4(void)
         }
         break;
 
-
+      case  FUNC_GPIX:                          //GPIX(x,y,<mode>)
+        if (Test_char(',')) goto expr4_error;
+        b = get_value();                        //2.Zahl
+        if(*txtpos == ',') {
+          txtpos++;
+          c = get_value();                      //optional 3.wert für modus
+        }
+        else c=0;
+        break;
+        
       case FUNC_FN:
         ((float *)variables_begin)[Fnoperator[charb]] = a;
         Fnvar = 0;
@@ -1996,7 +1959,7 @@ static float expr4(void)
 
 
       case FUNC_GPIX:
-        return Test_pixel(a, b, 0);
+        return Test_pixel(a, b, c);
         break;
 
       case FUNC_GET:
@@ -3550,12 +3513,13 @@ interpreteAtTxtpos:
         break;
 
       case KW_CLEAR:
+        Var_Neu_Platz = 1;                                //auch Array-Ram auf jeden Fall löschen
         clear_var();
         break;
 
-      case KW_THEN:                                   // THEN
+      case KW_THEN:                                      // THEN
         then_marker = false;
-        if ( val == 0 ) {                             //Überprüfung, ob alle If Bedingungen war sind
+        if ( val == 0 ) {                                //Überprüfung, ob alle If Bedingungen war sind
           break;
         }
         else
@@ -8866,32 +8830,7 @@ nochmal:
     }
 
 
-    //################################################## Systemparameter anzeigen ###########################################################
-    void show_systemparameters(void) {
-      Terminal.println();
-      Terminal.write("BuiltTime : ");
-      Terminal.write(BuiltTime);
-      Terminal.println();
-      Terminal.write("Release   : ");
-      Terminal.write(BasicVersion);
-      Terminal.println();
-      Terminal.write("Keyboard  : ");
-      Terminal.print(Keyboard_lang, DEC);
-      Terminal.write("=");
-      Terminal.write(Keylayout[Keyboard_lang]);
-      Terminal.println();
-      Terminal.write("Eeprom-Adr: #");
-      Terminal.print(EEPROM.read(11), HEX);
-      Terminal.println();
-      Terminal.write("SPI-RAM   : ");
-      Terminal.print(SPI_RAM_SIZE * 128);
-      Terminal.write(" kB");
-      Terminal.println();
-      Terminal.write("Workpath  : ");
-      Terminal.print(sd_pfad);
-      line_terminator();
-      printmsg("OK>", 0);
-    }
+
 
 
     //------------------------------------------------- Prüfe, ob Pixel gesetzt ist --------------------------------------------------------------

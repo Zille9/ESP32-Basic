@@ -72,10 +72,11 @@ void SPI_RAM_write(uint32_t addr, const uint8_t *values, int count) {
   spi_fram.writeEnable(false);
 }
 
-void SPI_FRAM_init(void) {
-  if (spi_fram.begin(3)) {
-    Terminal.println("Found SPI FRAM");
-  } else {
-    Terminal.println("No SPI FRAM found\r\n");
+void SPI_RAM_fill(uint32_t addr, uint32_t addr2,const uint8_t value)
+{ 
+  spi_fram.writeEnable(true);
+  for(uint32_t i=addr; i < addr2; i++){
+    spi_fram.write8(i, value);
   }
+  spi_fram.writeEnable(false);
 }

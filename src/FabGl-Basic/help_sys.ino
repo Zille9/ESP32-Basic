@@ -797,8 +797,10 @@ void show_Function_Help(int was) {
       Terminal.println("0=RAM, 1=FRAM, 2=EEPROM");
       break;
     case FUNC_GPIX:
-      Terminal.println("A=GPX(x,y)");
-      Terminal.println("reads the Pixel-Color on pos x,y");
+      Terminal.println("A=GPX(x,y<,mode>)");
+      Terminal.println("reads the Pixel on pos x,y");
+      Terminal.println("mode 0 = Pixel set or not");
+      Terminal.println("mode 1 = returns the pixel color");
       break;
     case FUNC_PIC:
       Terminal.println("A=GPIC(0/1)");

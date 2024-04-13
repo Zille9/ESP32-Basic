@@ -1,3 +1,52 @@
+// v1.99b:03.03.2024          -diverse Definitionen nach cfg.h verschoben (Display-Art, Tastatur-Layout, Pinkonfigurationen usw.)
+//                            -dadurch einige Codezeilen entfernt (ca.50) und einige Options-Funktionen gekürzt (SD-Card-Pins, Tastatur-Layout)
+//                            -Fehler im Editor Kilo entdeckt, wird ein Programm nicht geändert fehlt nach dem Laden im Basic das letzte Zeichen
+//                            -DIR-Ausgabe überarbeitet - jetzt werden versteckte Dateien nicht mehr angezeigt und mitgezählt - (Mac-Besonderheit für jede Datei auch ein Hidden-File anzulegen)
+//                            -SD-Card Betrieb mit TFT-Bildschirm jetzt funktionsfähig, der RAM muss beim Betrieb mit TFT verkleinert werden (siehe cfg.h)
+//                            -15408 Zeilen/sek.
+//
+// v1.98b:21.02.2024          -Update funktioniert auf einmal nicht mehr, was ist das nun wieder ? :-( aus dem Basic laden funktioniert nur zurück nicht !?
+//                            -Fehler endlich gefunden - es lag tatsächlich an der Basic.bin auf der SD-Karte -> neu compiliert und kopiert -> funktioniert!! :D
+//                            -einen kleinen Editor (KILO) von maksimKorzh (thankyou for the little Editor) eingebunden, wird gestartet, wenn EDIT ohne Zeilennummer eingegeben wird
+//                            -das ist zum Programme schreiben etwas komfortaber - mal sehen, wie er sich schlägt.
+//                            -16272 Zeilen/sek.
+//
+// v1.97b:18.02.2024          -RUN-Befehl erweitert RUN"/Filename" lädt und startet ein Basic-Programm -> es wird auf BAS und BIN - Erweiterung überprüft, um ein Basic oder Binärprogramm (Bload) zu starten
+//                            -BLOAD-Befehl entfernt - übernimmt jetzt Load und RUN LOAD"/BIN-FILE" oder RUN"/BINFILE"
+//                            -Start-Befehl entfernt - übernimmt jetzt der Befehl RUN, RUN* lädt und startet ein Programm aus dem FRAM
+//                            -FS.h entfernt -> wird nicht gebraucht
+//                            -Hilfe angepasst
+//
+// v1.96b:11.02.2024          -SD-Card-Aktivitätsanzeige über IO2 realisiert -> leuchtet bei SD-Card-Zugriff auf
+//                            -Keyboard-Initialisierung in setup() mit der Angabe der GPIO-Nummer
+//                            -15924 Zeilen/sek.
+//
+// v1.95b:28.01.2024          -Dir-Befehl erweitert ->DIR"ext" zeigt nur Dateien mit der Dateierweiterung 'ext' an Bsp.:DIR"BAS" listet nur Basic-Programme auf.
+//                            -15924 Zeilen/sek.
+//
+// v1.94b:19.01.2024          -Grafikbefehl FRAME erstellt -> erschafft Rechtecke mit abgerundeten Ecken ohne Fill-Funktion
+//                            -Fehler in getln() entdeckt, wurde nach dem Start die Backspacetaste und Enter gedrückt wurde der ESP32 resettet
+//                            -Eingabezähler hinzugefügt, sollte jetzt nicht mehr passieren
+//                            -15933 Zeilen/sek.
+//
+// v1.93b:13.01.2024          -Taste F10 mit der Ausgabe der mit Option gesicherten Parameter belegt ->Version, BuiltTime, Tastaturlayout, EEProm-Adresse, Arbeitsverzeichnis
+//                            -die restlichen Werte werden beim Start schon angezeigt
+//
+// v1.92b:07.01.2024          -Dump-Ausgabe für ILI9341 angepasst, da hier im Querformat x und y vertauscht sind
+//                            -SD-Karte bisher nicht gleichzeitig mit ILI9341 funktionsfähig !? mal sehen, woran das nun wieder liegt :-(
+//                            -ab und zu wird die CardKB-Tastatur nach dem Reset nicht erkannt -> ein reset-Befehl muss initiiert werden
+//
+// v1.91b:30.12.2023          -CardKB als Tastatur mit PS/2 Software eingebunden (über define auswählbar)
+//                            -kleine Änderungen in der ESC-Behandlung, da es beim CardKB kein Ctrl-C gibt -> ESC hat die gleiche Wirkung
+//                            -mit dem CardKB und dem ILI9341 ist nun eine Pocket-Variante von Basic32+ möglich :-)
+//                            -CardKB funktioniert nicht immer nach dem Reset :-( woran liegt das nun wieder?
+//                            -ESC-Abfrage verbessert, jetzt wird auch bei List-Ausgaben korrekt abgebrochen
+//                            -EEPROM Adresse falsch (0x57), auf dem MCP23017-Board ist der EEPROM auf Adresse 0x50 ->geändert
+//                            -SDA und SCL - Pins jetzt nicht mehr mit OPT IIC änderbar, das führte zu Problemen, da nicht immer korrekte Werte aus dem internen ESP32-Eeprom gelesen wurden
+//                            -15459 Zeilen/sek.
+//
+// v1.90b:24.12.2023          -Fehler in der Datumsbehandlung in ESP32_Time entdeckt -> der Monat wird von 0-11 zurückgegeben, daher wurde in der DIR-Datei-Anzeige der Monat falsch angezeigt
+//
 // v1.89b:12.12.2023          -TFT-Treiber für ILI9341 240x320 Pixel-Display integriert - Treiber ist über #define auswählbar
 //                            -Breadboard-Test soweit erfolgreich
 //                            -ab und zu startet das Display nicht korrekt, Ursache muss noch erforscht werden -> Print_info etwas geändert, scheint jetzt zu funktionieren
