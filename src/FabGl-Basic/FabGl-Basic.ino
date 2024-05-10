@@ -1,4 +1,4 @@
-/////////////////////////////////////////////////////;//////////////////////////////////////////////////////////////////////////////////////////////
+ ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //             Basic32+ with FabGL VGA library + PS2 PS2Controller                                                                                //
 //               for VGA monitor output - May 2019                                                                                                //
 //                                                                                                                                                //
@@ -45,10 +45,18 @@
 // April 2021
 //
 //
-#define BasicVersion "2.04b"
-#define BuiltTime "07.04.2024"
+#define BasicVersion "2.06b"
+#define BuiltTime "10.05.2024"
 // siehe Logbuch.txt zum Entwicklungsverlauf
-// v2.04b:07.04.2024          -Card-KB Treiber etwas angepasst (repeatfunktion) - ZX81 funktioniert (etwas hakelig aber es funktioniert) 
+// v2.06b:10.05.2024          -Fehler in Scroll-Funktion - Anzahl der Parameter war falsch
+//                            -16179 Zeilen/sek.
+//
+// v2.05b:13.04.2024          -Eingabeprompt im Stil des C64 geändert (READY. statt OK>)
+//                            -Startbildschirm etwas geschrumpft - Systeminfo's jetzt über F10 abrufbar
+//                            -Routine color_out verbessert - keine überstehenden Farbbalken mehr
+//                            -16164 Zeilen/sek.
+//
+// v2.04b:07.04.2024          -Card-KB Treiber etwas angepasst (repeatfunktion) - ZX81 funktioniert (etwas hakelig aber es funktioniert)
 //                            -Tastatur wird jetzt auch zuverlässig erkannt
 //                            -Ctrl-Tasten-Funktion im Card-KB Treiber eingebunden -> Fn + Buchstabe - Ctrl-C somit wieder funktionstüchtig
 //                            -CLEAR löscht jetzt immer die Array-Tabelle (bisher nur, wenn Arrays deklariert waren) - muss vor der ersten Array-Declaration aufgerufen werden (siehe "SOMBRERO.BAS")
@@ -121,6 +129,7 @@ fabgl::PS2Controller    PS2Controller;
 fabgl::Keyboard Keyboard;
 fabgl::Canvas           GFX(&VGAController);
 TerminalController      tc(&Terminal);
+byte v_mode = 0;                             //Standard-Bildschirmauflösung 320x240
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 
 #define erststart_marker 131                //dieser Marker steht im EEprom an Position 100 - wird der ESP32 zum ersten mal mit dem Basic gestartet werden standard-Werte gesetzt
@@ -145,12 +154,17 @@ byte Editor_marker = 101;            // EEPROM-Platz 101 beinhaltet den Editor-m
 #include <SPI.h>
 //SPI CLASS FOR REDEFINED SPI PINS !
 SPIClass spiSD(HSPI);
-File fp;//, fpsf;
+File fp;
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------- OTA-Update-Lib --------------------------------------------------------------------------------------------
 #include <Update.h>
 //-------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+//------------------------------------- SPRITES --------------------------------------------------------------------------------------------
+#include <collisiondetector.h>
+//-------------------------------------------------------------------------------------------------------------------------------------------------
+*/
 
 //------------------------------------- ESP32-Time-Lib fuer Datei-zeitstempel ---------------------------------------------------------------------
 #include <ESP32Time.h>
@@ -175,7 +189,7 @@ bool twire = false;
 uint32_t delayMS;
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 
-//-------------------------------- BMP180-Sensor---------------------------------------------------------------------------------------------------
+//-------------------------------- BMP180-Sensor --------------------------------------------------------------------------------------------------
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085.h>
 // Store an instance of the BMP180 sensor.
@@ -510,6 +524,7 @@ const static char keywords[] PROGMEM = {
   'S', 'W', 'A', 'P' + 0x80,
   'C', 'O', 'P', 'Y' + 0x80,
   'A', 'N', 'G', 'L', 'E' + 0x80,
+  //'B', 'A', 'R' + 0x80,
   0
 };
 
@@ -600,7 +615,8 @@ enum {
   KW_SWAP,
   KW_COPY,
   KW_ANGLE,
-  KW_DEFAULT  //84/* hier ist das Ende */
+  //KW_BAR,
+  KW_DEFAULT  //85/* hier ist das Ende */
 };
 
 int KW_WORDS = KW_DEFAULT;
@@ -1215,11 +1231,20 @@ static unsigned short wait_key(bool modes) {
 
 //--------------------------------------------- Unterprogramm - Zeile eingeben --------------------------------------------------------------------
 
-static void getln(char prompt)
+static void getln(int m)//char prompt)
 { int chpos = -1;
-  outchar('O');
-  outchar('K');
-  outchar(prompt);
+  if (m) 
+  {
+    outchar('R');
+    outchar('E');
+    outchar('A');
+    outchar('D');
+    outchar('Y');
+    outchar('.');
+    line_terminator();
+  }
+  //outchar(prompt);
+
   txtpos = program_end + sizeof(LINENUM);
 
   while (1)
@@ -1773,13 +1798,13 @@ static float expr4(void)
       case  FUNC_GPIX:                          //GPIX(x,y,<mode>)
         if (Test_char(',')) goto expr4_error;
         b = get_value();                        //2.Zahl
-        if(*txtpos == ',') {
+        if (*txtpos == ',') {
           txtpos++;
           c = get_value();                      //optional 3.wert für modus
         }
-        else c=0;
+        else c = 0;
         break;
-        
+
       case FUNC_FN:
         ((float *)variables_begin)[Fnoperator[charb]] = a;
         Fnvar = 0;
@@ -2718,7 +2743,8 @@ static int input(void)
 inputagain:
   tmptxtpos = txtpos;
   expression_error = 0;
-  getln( '?' );
+  outchar('?');
+  getln(0);
   toUppercaseBuffer();
   txtpos = program_end + sizeof(unsigned short);
   spaces();
@@ -3168,7 +3194,6 @@ void loop()
 
   //--------------------------------------------- hier geht's los -----------------------------------------------------------------------------------
   Basic_Interpreter();
-  //show_screen();
 }
 
 
@@ -3188,11 +3213,9 @@ void Basic_Interpreter()
   check_editor();                                        // befindet sich im EEPROM-Platz 50 die 123, dann die datei tmp.bas automatisch laden
   int a, e;
 
-
   //################################################# Hauptprogrammschleife ######################################################
   while (1)
   {
-    //Terminal.println("Anfang");
 
     expression_error = 0;                               //alle Errors zurücksetzen
 
@@ -3206,11 +3229,9 @@ void Basic_Interpreter()
     }
 
     else {
-
-      getln('>');
+      getln(1);
       //-------------------------------- Start Zeile einfügen ---------------------------------------------
       move_line();                                                  //Zeile in Großbuchstaben umwandeln und ans Ende des Speicher verschieben
-
       linenum = testnum();                                          // Zeilennummer vorhanden?
       spaces();
       if (linenum == 0) {
@@ -3479,7 +3500,12 @@ interpreteAtTxtpos:
         if (line_rec_circ(4, 6))
           continue;
         break;
-
+      /*
+      case KW_BAR:
+        if(line_rec_circ(10,5))                           //BAR x, y, orient, w, h, wert
+          continue;
+        break;
+        */
       case KW_SWAP:
         if (line_rec_circ(5, 3))                          //SWAP x,y,xx,yy ->vertauscht vorder und Hintergrundfarbe eines rechtecks
           continue;
@@ -3556,7 +3582,7 @@ interpreteAtTxtpos:
         break;
 
       case KW_SCROLL:
-        if (line_rec_circ(8, 2))
+        if (line_rec_circ(8, 1))
           continue;
         break;
 
@@ -4699,6 +4725,8 @@ static int line_rec_circ(int circ_or_rect, int param)
   //#################### Linie, Rechteck oder Kreis zeichnen #################
   //int x,y;
   short int i, par[7];
+  float w[4];
+
   i = 0;
 
   while (i < param) {                 //die ersten Parameter eingeben
@@ -4777,7 +4805,11 @@ static int line_rec_circ(int circ_or_rect, int param)
       //y=par[1]+par[3]*sin(par[2]*M_PI/180);
       GFX.drawLine(par[0], par[1], par[0] + par[3]*cos(par[2]*M_PI / 180), par[1] + par[3]*sin(par[2]*M_PI / 180));
       break;
-
+    /*
+    case 10:
+      drawBar(par[0],par[1],par[2], par[3], par[4], par[5]);  //zeichnet Bargraph, Progressbar
+      break;
+      */
     default:
       GFX.drawLine(par[0], par[1], par[2], par[3]);                          //Line line x,y,xx,yy
       break;
@@ -5542,6 +5574,7 @@ int y_pos = VGAController.getViewPortHeight() / y_char[fontsatz]; //VGAControlle
 int x_pos = VGAController.getViewPortWidth() / x_char[fontsatz];  //VGAController.getScreenWidth() / x_char[fontsatz];
 #endif
 
+
 #ifdef Akkualarm_enabled
 float g = 3.3 / 4095 * 4000;//analogRead(Batt_Pin);
 g = g / 0.753865;                                 //(Umess/(R2/(R1+R2)) R1=3.327kohm R2=10.19kohm
@@ -5558,7 +5591,7 @@ if (h > 100) h = 100;
   r = 42;
 
 
-  tc.setCursorPos((x_pos - 28) / 2, 1);
+  tc.setCursorPos((x_pos - 28) / 2, 2);
   Terminal.write("*Basic32+ V");
   Terminal.write(BasicVersion);
   Terminal.write(" Zille-Soft*");
@@ -5570,35 +5603,15 @@ Terminal.print(int(h), DEC);
 Terminal.write("%");
 #endif
 
-  tc.setCursorPos((x_pos - 16) / 2 , 2);
+  tc.setCursorPos((x_pos - 16) / 2 , 4);
   // memory free
 
   Terminal.print(int(variables_begin - program_end), DEC);
   printmsg(memorymsg, 1);
-  tc.setCursorPos(1, 4);
 
-  Terminal.write("Terminal-Size:");
-  Terminal.print(x_pos);
-  Terminal.write("x");
-  Terminal.print(y_pos);
-
-  tc.setCursorPos(1, 5);
-  Terminal.write("ESP-Memory   :");
-  Terminal.print(ESP.getFreeHeap());
-
-  tc.setCursorPos(1, 6);
-  Terminal.print("Fontset      :");
-  Terminal.print(fontsatz);
-
-  tc.setCursorPos(1, 7);
-  Terminal.print("Theme        :");
-  Terminal.print(Theme_state);
-  Terminal.print("=");
-  Terminal.print(Themes[Theme_state]);
   Terminal.enableCursor(true);
-  tc.setCursorPos(1, 9);
+  tc.setCursorPos(1, 6);
 
-  //Terminal.println(RAMEND-STACK_SIZE-(26 * 27 * VAR_SIZE));
 }
 
 
@@ -5721,7 +5734,10 @@ static void outchar(char c)
     fp.write( c );
   }
   else {
-    if (ser_marker && list_send) Serial1.write(c);       //User-Seriellschnittstelle
+    if (ser_marker && list_send) {
+      Serial1.write(c);                 //User-Seriellschnittstelle
+      delay(2);                         //kurzes Delay nach jeder Zeile, sonst läuft der RX-Buffer über
+    }
 
     else if (Frame_nr) {                                 //************************** im Fenster schreiben ******************
 
@@ -5813,6 +5829,7 @@ static int initSD( void )
 void sd_ende(void) {
   spiSD.end();                                              //SD-Card unmount
   spi_fram.begin(3);                                        //FRAM aktivieren
+  string_marker == false;                                   //Stringmarker für Dateioperationen löschen
 }
 
 
@@ -6367,6 +6384,7 @@ return 0;
     dir.close();
 
     sd_ende();                                             //SD-Card unmount
+
   }
 
   //#######################################################################################################################################
@@ -6518,6 +6536,7 @@ return 0;
 
     VGAController.begin();                                                                //VGA-Variante //64 Farben
     byte vm = EEPROM.read(6);                                                             //Videomodus lesen
+    v_mode = vm;
     switch ( vm ) {
       case 0:
         VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung
@@ -6539,9 +6558,14 @@ return 0;
         VGAController.setResolution(VGA_320x200_60Hz, 320, 192);                           //Atari 800XL
         //Theme_state = 7;
         break;
+      case 5:
+        VGAController.setResolution(VGA_400x300_60Hz);        
+        break;
+                           
       default:
         VGAController.setResolution(QVGA_320x240_60Hz);                                    //Standard-Auflösung
         //Theme_state = 2;
+        v_mode = 0;
         break;
     }
 
@@ -6591,7 +6615,8 @@ return 0;
           tron_marker = !tron_marker;
           if (tron_marker) printmsg("TRON", 1);
           else printmsg("TROFF", 1);
-          printmsg("OK>", 0);
+          line_terminator();
+          printmsg("READY.", 1);
         }
         *vk = VirtualKey::VK_NONE;
       }
@@ -7098,6 +7123,8 @@ nochmal:
       LCD_ADRESSE = get_value();                //I2C-Adresse
 
       HD44780LCD myLCD(LCD_ZEILEN, LCD_SPALTEN, LCD_ADRESSE, &myI2C);  // LCD object.rows ,cols ,PCF8574 I2C addr, Interface)
+      //HD44780LCD myLCD(4, 20, 39, &myI2C);  // LCD object.rows ,cols ,PCF8574 I2C addr, Interface)
+      
       EEPROM.write ( 3, LCD_ZEILEN ) ;       // Themen nummer im Flash speichern
       EEPROM.write ( 4, LCD_SPALTEN ) ;
       EEPROM.write ( 5, LCD_ADRESSE ) ;
@@ -7109,11 +7136,11 @@ nochmal:
       myLCD.PCF8574_LCDClearScreen();
       myLCD.PCF8574_LCDBackLightSet(LCD_Backlight);
       myLCD.PCF8574_LCDGOTO(LCDLineNumberOne, 0);
-      /*
+      
         myLCD.PCF8574_LCDSendString("Zille-Soft-GmbH");
         myLCD.PCF8574_LCDGOTO(LCDLineNumberThree, 0);
         myLCD.PCF8574_LCDSendString("Neue Zeile!");
-      */
+      
       return 0;
     }
 
@@ -7454,7 +7481,7 @@ nochmal:
       char fu = table_index;
       int i, adr;
 
-      if (Test_char('=')) return 1;                                        //nach der Option kommt ein '='
+      //if (Test_char('=')) return 1;                                        //nach der Option kommt ein '='
 
       switch (fu) {
         case OPT_VMODE:                                                    //Festlegung Bildschirmauflösung 0=320x240, 1=320X200 2=400x300 EEPROM Platz 6
@@ -8797,14 +8824,14 @@ nochmal:
       }
       fbcolor(Vordergrund, Hintergrund);
       line_terminator();
-      printmsg("OK>", 0);
+      printmsg("READY.", 1);
     }
     //########################################################### Farbcodes ausgeben ###########################################################
 
     void color_out(void) {
       int z = 0;
       char tx[10];
-
+      Terminal.enableCursor(false);                                 //Cursor ausschalten
       for (int i = 0; i < 64 ; i++)
       {
         if (i == 0) fbcolor(63, 0);
@@ -8820,13 +8847,15 @@ nochmal:
 
         if (z == 8) {
           z = 0;
+          fbcolor(Hintergrund, Hintergrund);
           line_terminator();
         }
 
       }
       fbcolor(Vordergrund, Hintergrund);
       line_terminator();
-      printmsg("OK>", 0);
+      printmsg("READY.", 1);
+      Terminal.enableCursor(true);                                 //Cursor einschalten
     }
 
 
@@ -8900,16 +8929,12 @@ nochmal:
       for ( int n = gr_start; n <= gr_end; n += 1)
       {
         pnt[npnt].X = x + (cos((n % 360) * M_PI / 180) * r_min * 1000 ) / 800;
-        //pnt[npnt].X = x + (cos_tab[n % 360] * r_min) / 800;
         pnt[npnt].Y = y + (cos(((n + 270) % 360) * M_PI / 180) * r_min ) ; // 1000;
-        //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_min) / 1000;
         drawArcP(pnt, npnt);
       }
       for ( int n = gr_end; n >= gr_start; n -= 1)
       { pnt[npnt].X = x + (cos((n % 360) * M_PI / 180) * r_max * 1000) / 800; //cos_tab[n % 360] * r_max) / 800;
-        //pnt[npnt].X = x + (cos_tab[n % 360] * r_max) / 800;
         pnt[npnt].Y = y + (cos(((n + 270) % 360) * M_PI / 180) * r_max) ; /// 1000;
-        //pnt[npnt].Y = y + (cos_tab[(n + 270) % 360] * r_max) / 1000;
         drawArcP(pnt, npnt);
       }
       if (filled == 1) GFX.fillPath(pnt, npnt);
