@@ -1,1 +1,0 @@
-Upload Basic-x_xx.bin with flash_download_tool on Adress 0x10000.

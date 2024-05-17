@@ -5106,10 +5106,12 @@ void fbcolor(int fc, int bc)
 
 void fcolor(int fc) {
   GFX.setPenColor((bitRead(fc, 5) * 2 + bitRead(fc, 4)) * 64, (bitRead(fc, 3) * 2 + bitRead(fc, 2)) * 64, (bitRead(fc, 1) * 2 + bitRead(fc, 0)) * 64);
+  
 }
 
 void bcolor(int bc) {
   GFX.setBrushColor((bitRead(bc, 5) * 2 + bitRead(bc, 4)) * 64, (bitRead(bc, 3) * 2 + bitRead(bc, 2)) * 64, (bitRead(bc, 1) * 2 + bitRead(bc, 0)) * 64);
+  
 }
 
 
@@ -5135,6 +5137,7 @@ static int set_pen(void)
     if (expression_error) return 1;
 
     GFX.setPenWidth(pw);                           //Pen-Weite
+    
   }
   // Check that we are at the end of the statement
   else if (*txtpos != NL && *txtpos != ':') return 1;
@@ -6210,20 +6213,15 @@ return 0;
 }
 
   bool search_file(const char* names) {
-    int f_len, s_len;
-    String cbuf;
-    char f_search[STR_LEN];
-
-    cbuf = String(names);
-    cbuf.toUpperCase();                               //String in Grossbuchstaben umwandeln
-    cbuf.toCharArray(f_search, cbuf.length() + 1);       //und nach names zurückschreiben
-
-    f_len = String(filestring).length();
-    s_len = String(f_search).length();
-    if (filestring[2] == f_search[s_len - 1] && filestring[1] == f_search[s_len - 2] && filestring[0] == f_search[s_len - 3]) return true;
-    return false;
+    
+  String cbuf;
+  
+  cbuf = String(names);
+  cbuf.toUpperCase();                               //String in Grossbuchstaben umwandeln
+  if(cbuf.indexOf(filestring) > -1) return true;
+  else return false;
   }
-
+/*
   bool hidden_file(const char* names) {
     int f_len, s_len;
     String cbuf;
@@ -6238,7 +6236,7 @@ return 0;
     if (filestring[2] == f_search[s_len - 1] && filestring[1] == f_search[s_len - 2] && filestring[0] == f_search[s_len - 3]) return true;
     return false;
   }
-
+*/
   void cmd_Dir(void)
   { int ln = 1;
     int ex = 0;
@@ -6283,39 +6281,32 @@ return 0;
       cbuf = String(entry.name());
       cbuf.toCharArray(tempstring, cbuf.length() + 1);
 
-      if (strstr(tempstring, hi)) hidden_flag = true;             //versteckte dateien ausblenden
-      if (ext == true) {                                          //Sucherweiterung aktiv?
-        found = search_file(entry.name());                        //untersuche Dateinamen mit Suchstring
+    if (strstr(tempstring, hi)) continue;                       //versteckte dateien ausblenden
+    
+    if (ext == true) {                                          //Sucherweiterung aktiv?
+            
+      found = search_file(entry.name());                        //untersuche Dateinamen mit Suchstring
 
-        if (found == true )
-        {
-          if (hidden_flag == true) {                              //unsichtbare Dateien ausblenden
-            hidden_flag = false;
-            continue;
-          }
-          printmsg(spacemsg, 0);
-          printmsg(entry.name(), 0);                              //Datei- oder Verzeichnisname ausgeben
-          found = false;
-          was = key_press(ln);
-          if (was == 0) ln = 1;
-          if (was == 1) ex = 1;
-
-        }
-        else {
-          entry.close();
-          continue;
-        }
-      }
-
-      else {
-        if (hidden_flag == true) {                                //unsichtbare Dateien ausblenden
-          hidden_flag = false;
-          continue;
-        }
+      if (found == true )
+      {
         printmsg(spacemsg, 0);
-        printmsg(entry.name(), 0);                                 //Datei- oder Verzeichnisname ausgeben
-
+        printmsg(entry.name(), 0);                              //Datei- oder Verzeichnisname ausgeben
+        found = false;
+        was = key_press(ln);
+        if (was == 0) ln = 1;
+        if (was == 1) ex = 1;
       }
+      else {
+        entry.close();
+        continue;
+      }
+    }
+
+    else {
+      printmsg(spacemsg, 0);
+      printmsg(entry.name(), 0);                                 //Datei- oder Verzeichnisname ausgeben
+    }
+
 
 
       //-------------------------------- Verzeichnis ----------------------------------------------------------------
